@@ -1,110 +1,148 @@
-// use anyhow::{anyhow, Result};
-// use prost::Message;
-// use quinn::{ClientConfig, Endpoint};
-// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-// use std::sync::Arc;
-// use std::time::SystemTime;
+use anyhow::{anyhow, Result};
+use prost::Message;
+use quinn::{ClientConfig, Endpoint};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
+use std::time::SystemTime;
 
-// // وارد کردن انواع داده‌ای مورد نیاز از rustls و pki-types
-// use rustls::client::danger::{ServerCertVerified, ServerCertVerifier};
-// use rustls::pki_types::{CertificateDer, ServerName};
+// وارد کردن انواع داده‌ای جدید مورد نیاز از کتابخانه‌ها
+use quinn::crypto::rustls::QuicClientConfig;
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{crypto, DigitallySignedStruct, SignatureScheme};
 
-// // ماژول پروتوباف را از کتابخانه پروژه (lib.rs) وارد می‌کنیم
-// use quic_protobuf_server::proto::{
-//     client_to_server::Payload, AudioChunk, CanvasCommand, ClientToServer,
-// };
+// از نام پکیج شما (black_board_back) برای وارد کردن ماژول proto استفاده می‌کنیم
+use black_board_back::proto::{
+    client_to_server::Payload, AudioChunk, CanvasCommand, ClientToServer,
+};
 
-// #[tokio::main]
-// async fn main() -> Result<()> {
-//     // گرفتن آرگومان از خط فرمان برای تعیین نوع پیام
-//     let args: Vec<String> = std::env::args().collect();
-//     if args.len() < 2 {
-//         println!("Usage: cargo run --bin client <canvas|audio>");
-//         return Ok(());
-//     }
-//     let message_type = &args[1];
+#[tokio::main]
+async fn main() -> Result<()> {
+    // اصلاح شد: یک ارائه‌دهنده رمزنگاری پیش‌فرض را برای rustls نصب می‌کنیم
+    // این کار برای نسخه‌های جدید rustls الزامی است.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
 
-//     // --- تنظیمات کلاینت ---
-//     let server_addr = "127.0.0.1:12345".parse::<SocketAddr>()?;
-//     let client_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+    // گرفتن آرگومان از خط فرمان برای تعیین نوع پیام
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        println!("Usage: cargo run --bin client <canvas|audio>");
+        return Ok(());
+    }
+    let message_type = &args[1];
 
-//     let mut endpoint = Endpoint::client(client_addr)?;
-//     endpoint.set_default_client_config(configure_client());
+    // --- تنظیمات کلاینت ---
+    let server_addr = "127.0.0.1:12345".parse::<SocketAddr>()?;
+    let client_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
 
-//     println!("Connecting to server at {}...", server_addr);
-//     let conn = endpoint.connect(server_addr, "localhost")?.await?;
-//     println!("Connected successfully!");
+    let mut endpoint = Endpoint::client(client_addr)?;
+    endpoint.set_default_client_config(configure_client()?);
 
-//     // --- ساخت پیام بر اساس آرگومان ورودی ---
-//     let message = match message_type.as_str() {
-//         "canvas" => {
-//             println!("Sending CanvasCommand...");
-//             let timestamp = SystemTime::now()
-//                 .duration_since(SystemTime::UNIX_EPOCH)?
-//                 .as_millis() as i64;
+    println!("[Client] Connecting to server at {}...", server_addr);
+    let conn = endpoint.connect(server_addr, "localhost")?.await?;
+    println!("[Client] Connected successfully!");
 
-//             ClientToServer {
-//                 payload: Some(Payload::CanvasCommand(CanvasCommand {
-//                     command_json: r#"{"action": "draw", "points": [10, 20, 30, 40]}"#.to_string(),
-//                     timestamp_ms: timestamp,
-//                 })),
-//             }
-//         }
-//         "audio" => {
-//             println!("Sending AudioChunk...");
-//             ClientToServer {
-//                 payload: Some(Payload::AudioChunk(AudioChunk {
-//                     data: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-//                     sequence: 1,
-//                 })),
-//             }
-//         }
-//         _ => {
-//             return Err(anyhow!("Invalid message type. Use 'canvas' or 'audio'."));
-//         }
-//     };
+    // --- ساخت پیام بر اساس آرگومان ورودی ---
+    let message = match message_type.as_str() {
+        "canvas" => {
+            println!("[Client] Preparing CanvasCommand...");
+            let timestamp = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)?
+                .as_millis() as i64;
 
-//     // --- ارسال پیام ---
-//     let (mut send, _recv) = conn.open_bi().await?;
-//     let mut buf = Vec::new();
-//     message.encode(&mut buf)?;
+            ClientToServer {
+                payload: Some(Payload::CanvasCommand(CanvasCommand {
+                    command_json: r#"{"action": "draw", "points": [10, 20, 30, 40]}"#.to_string(),
+                    timestamp_ms: timestamp,
+                })),
+            }
+        }
+        "audio" => {
+            println!("[Client] Preparing AudioChunk...");
+            ClientToServer {
+                payload: Some(Payload::AudioChunk(AudioChunk {
+                    data: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                    sequence: 1,
+                })),
+            }
+        }
+        _ => {
+            return Err(anyhow!("Invalid message type. Use 'canvas' or 'audio'."));
+        }
+    };
 
-//     send.write_all(&buf).await?;
-//     send.finish().await?; // مهم: استریم را می‌بندیم تا سرور بفهمد پیام تمام شده
-//     println!("Message sent successfully.");
+    // --- ارسال پیام ---
+    let (mut send, _recv) = conn.open_bi().await?;
+    let mut buf = Vec::new();
 
-//     // بستن اتصال
-//     conn.close(0u32.into(), b"done");
-//     endpoint.wait_idle().await;
+    Message::encode(&message, &mut buf)?;
 
-//     Ok(())
-// }
+    send.write_all(&buf).await?;
 
-// /// کانفیگ کلاینت برای پذیرش گواهی‌نامه self-signed سرور
-// fn configure_client() -> ClientConfig {
-//     let crypto = rustls::ClientConfig::builder()
-//         .with_safe_defaults()
-//         .with_custom_certificate_verifier(Arc::new(SkipServerVerification))
-//         .with_no_client_auth();
+    // متد .finish() دیگر Future نیست و نباید await شود.
+    send.finish()?;
 
-//     ClientConfig::new(Arc::new(crypto))
-// }
+    println!("[Client] Message sent successfully.");
 
-// /// یک تاییدکننده گواهی‌نامه که هر گواهی‌نامه‌ای را قبول می‌کند (فقط برای تست!)
-// struct SkipServerVerification;
+    // بستن اتصال
+    conn.close(0u32.into(), b"done");
+    endpoint.wait_idle().await;
 
-// // اصلاح شد: از ServerCertVerifier که از ماژول danger وارد شده استفاده می‌کنیم
-// impl ServerCertVerifier for SkipServerVerification {
-//     fn verify_server_cert(
-//         &self,
-//         _end_entity: &CertificateDer<'_>,
-//         _intermediates: &[CertificateDer<'_>],
-//         _server_name: &ServerName<'_>,
-//         _scts: &mut dyn Iterator<Item = &[u8]>,
-//         _ocsp_response: &[u8],
-//         _now: std::time::SystemTime,
-//     ) -> Result<ServerCertVerified, rustls::Error> {
-//         // اصلاح شد: از ServerCertVerified که از ماژول danger وارد شده استفاده می‌کنیم
-//         Ok(ServerCertVerified::assertion())
-//     }
-// }
+    Ok(())
+}
+
+/// کانفیگ کلاینت برای پذیرش گواهی‌نامه self-signed سرور
+fn configure_client() -> Result<ClientConfig> {
+    // کانفیگ rustls را می‌سازیم و سپس آن را برای quinn آماده می‌کنیم
+    let crypto = rustls::ClientConfig::builder()
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(SkipServerVerification))
+        .with_no_client_auth();
+
+    // کانفیگ rustls را به یک کانفیگ سازگار با quinn تبدیل می‌کنیم
+    let quic_crypto = QuicClientConfig::try_from(crypto)?;
+
+    Ok(ClientConfig::new(Arc::new(quic_crypto)))
+}
+
+/// یک تاییدکننده گواهی‌نامه که هر گواهی‌نامه‌ای را قبول می‌کند (فقط برای تست!)
+#[derive(Debug)]
+struct SkipServerVerification;
+
+impl ServerCertVerifier for SkipServerVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        crypto::ring::default_provider()
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
+}

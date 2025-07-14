@@ -3,11 +3,25 @@ name = "black_board_back"
 version = "0.1.0"
 edition = "2024"
 
+# تعریف صریح کتابخانه پروژه
+[lib]
+path = "src/lib.rs"
+
+# تعریف صریح باینری سرور
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+# تعریف صریح باینری کلاینت
+[[bin]]
+name = "client"
+path = "src/bin/client.rs"
+
 [dependencies]
 anyhow = "1.0.98"
 bytes = "1.10.1"
 prost = "0.14.1"
-quinn = "0.11.8"
+quinn = { version = "0.11.8", features = ["rustls"] }
 rcgen = "0.14.2"
 rustls = "0.23.29"
 rustls-pki-types = "1.12.0"

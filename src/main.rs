@@ -1,20 +1,16 @@
 use anyhow::Result;
 use prost::Message;
 use quinn::{Connection, Endpoint, ServerConfig};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer}; // وارد کردن انواع داده‌ای از rustls
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tracing::{error, info, Level};
 use tracing_subscriber;
 
-// ماژول برای کدهای تولید شده توسط prost
-pub mod proto {
-    // این خط فایل تولید شده توسط build.rs را شامل می‌شود.
-    include!(concat!(env!("OUT_DIR"), "/communication.rs"));
-}
-
-use proto::client_to_server::Payload;
-use proto::ClientToServer;
+// اصلاح شد: از کلمه کلیدی `crate` برای ارجاع به کتابخانه همین پروژه استفاده می‌کنیم
+use black_board_back::proto::{
+    client_to_server::Payload, AudioChunk, CanvasCommand, ClientToServer,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -101,7 +97,6 @@ async fn handle_stream(recv_stream: &mut quinn::RecvStream) -> Result<()> {
                     "Received Canvas Command: '{}' at timestamp {}",
                     cmd.command_json, cmd.timestamp_ms
                 );
-                // TODO: منطق پردازش دستورات canvas را اینجا اضافه کنید
             }
             Payload::AudioChunk(chunk) => {
                 info!(
@@ -109,7 +104,6 @@ async fn handle_stream(recv_stream: &mut quinn::RecvStream) -> Result<()> {
                     chunk.sequence,
                     chunk.data.len()
                 );
-                // TODO: منطق پردازش داده‌های صوتی را اینجا اضافه کنید
             }
         }
     } else {
@@ -119,21 +113,16 @@ async fn handle_stream(recv_stream: &mut quinn::RecvStream) -> Result<()> {
     Ok(())
 }
 
-/// ساخت کانفیگ سرور با یک گواهی‌نامه self-signed (سازگار با API جدید)
+/// ساخت کانفیگ سرور با یک گواهی‌نامه self-signed
 fn configure_server() -> Result<(ServerConfig, Vec<u8>)> {
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()])?;
     
-    // استخراج گواهی‌نامه و کلید خصوصی در فرمت DER
     let cert_der_bytes = cert.cert.der().to_vec();
     let priv_key_der_bytes = cert.signing_key.serialize_der();
 
-    // ساخت زنجیره گواهی‌نامه برای rustls
     let cert_chain = vec![CertificateDer::from(cert_der_bytes.clone())];
-    
-    // ساخت کلید خصوصی برای rustls از نوع PKCS#8
-    let priv_key = PrivateKeyDer::from(rustls::pki_types::PrivatePkcs8KeyDer::from(priv_key_der_bytes));
+    let priv_key = PrivateKeyDer::from(rustls_pki_types::PrivatePkcs8KeyDer::from(priv_key_der_bytes));
 
-    // ساخت کانفیگ سرور با استفاده از انواع داده‌ای rustls
     let server_config = ServerConfig::with_single_cert(cert_chain, priv_key)?;
 
     Ok((server_config, cert_der_bytes))
