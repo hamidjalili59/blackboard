@@ -3,13 +3,12 @@ use prost::Message;
 use quinn::{Connection, Endpoint, ServerConfig};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
 use tracing::{error, info, Level};
 use tracing_subscriber;
 
 // اصلاح شد: از کلمه کلیدی `crate` برای ارجاع به کتابخانه همین پروژه استفاده می‌کنیم
 use black_board_back::proto::{
-    client_to_server::Payload, AudioChunk, CanvasCommand, ClientToServer,
+    client_to_server::Payload, ClientToServer,
 };
 
 #[tokio::main]
