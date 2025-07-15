@@ -1,9 +1,10 @@
 use anyhow::{anyhow, Result};
 use prost::Message;
-use quinn::{ClientConfig, Endpoint};
+use quinn::{ClientConfig, Connection, Endpoint};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{SystemTime};
+use tokio::time::Instant;
 
 // وارد کردن انواع داده‌ای جدید مورد نیاز از کتابخانه‌ها
 use quinn::crypto::rustls::QuicClientConfig;
@@ -16,10 +17,36 @@ use black_board_back::proto::{
     client_to_server::Payload, AudioChunk, CanvasCommand, ClientToServer,
 };
 
+// تعداد درخواست‌های همزمانی که می‌خواهید ارسال کنید
+const NUM_REQUESTS: u32 = 1000;
+
+/// این تابع یک درخواست تکی را به سرور ارسال می‌کند
+async fn send_single_request(
+    endpoint: &Endpoint,
+    server_addr: SocketAddr,
+    message: &ClientToServer,
+) -> Result<()> {
+    // اتصال به سرور
+    let conn: Connection = endpoint.connect(server_addr, "localhost")?.await?;
+
+    // باز کردن یک stream دوطرفه
+    let (mut send, _recv) = conn.open_bi().await?;
+
+    // انکود کردن و ارسال پیام
+    let mut buf = Vec::new();
+    Message::encode(message, &mut buf)?;
+    send.write_all(&buf).await?;
+    send.finish()?;
+
+    // بستن اتصال
+    conn.close(0u32.into(), b"done");
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    // اصلاح شد: یک ارائه‌دهنده رمزنگاری پیش‌فرض را برای rustls نصب می‌کنیم
-    // این کار برای نسخه‌های جدید rustls الزامی است.
+    // نصب ارائه‌دهنده رمزنگاری پیش‌فرض برای rustls
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
@@ -27,10 +54,16 @@ async fn main() -> Result<()> {
     // گرفتن آرگومان از خط فرمان برای تعیین نوع پیام
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
-        println!("Usage: cargo run --bin client <canvas|audio>");
+        println!("Usage: cargo run --bin client <canvas|audio> [num_requests]");
+        println!("Example: cargo run --bin client canvas 5000");
         return Ok(());
     }
     let message_type = &args[1];
+    let num_requests = if args.len() > 2 {
+        args[2].parse::<u32>().unwrap_or(NUM_REQUESTS)
+    } else {
+        NUM_REQUESTS
+    };
 
     // --- تنظیمات کلاینت ---
     let server_addr = "127.0.0.1:12345".parse::<SocketAddr>()?;
@@ -38,55 +71,83 @@ async fn main() -> Result<()> {
 
     let mut endpoint = Endpoint::client(client_addr)?;
     endpoint.set_default_client_config(configure_client()?);
+    
+    // استفاده از Arc برای به اشتراک‌گذاری امن endpoint بین تسک‌ها
+    let endpoint = Arc::new(endpoint);
 
-    println!("[Client] Connecting to server at {}...", server_addr);
-    let conn = endpoint.connect(server_addr, "localhost")?.await?;
-    println!("[Client] Connected successfully!");
-
-    // --- ساخت پیام بر اساس آرگومان ورودی ---
+    // --- ساخت پیام نمونه ---
     let message = match message_type.as_str() {
-        "canvas" => {
-            println!("[Client] Preparing CanvasCommand...");
-            let timestamp = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)?
-                .as_millis() as i64;
-
-            ClientToServer {
-                payload: Some(Payload::CanvasCommand(CanvasCommand {
-                    command_json: r#"{"action": "draw", "points": [10, 20, 30, 40]}"#.to_string(),
-                    timestamp_ms: timestamp,
-                })),
-            }
-        }
-        "audio" => {
-            println!("[Client] Preparing AudioChunk...");
-            ClientToServer {
-                payload: Some(Payload::AudioChunk(AudioChunk {
-                    data: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                    sequence: 1,
-                })),
-            }
-        }
+        "canvas" => ClientToServer {
+            payload: Some(Payload::CanvasCommand(CanvasCommand {
+                command_json: r#"{"action": "stress_test"}"#.to_string(),
+                timestamp_ms: 0,
+            })),
+        },
+        "audio" => ClientToServer {
+            payload: Some(Payload::AudioChunk(AudioChunk {
+                data: vec![0; 10],
+                sequence: 0,
+            })),
+        },
         _ => {
             return Err(anyhow!("Invalid message type. Use 'canvas' or 'audio'."));
         }
     };
+    let message = Arc::new(message);
 
-    // --- ارسال پیام ---
-    let (mut send, _recv) = conn.open_bi().await?;
-    let mut buf = Vec::new();
+    // --- شروع تست بار ---
+    println!(
+        "🚀 Starting stress test with {} concurrent requests...",
+        num_requests
+    );
+    let start_time = Instant::now();
+    let mut tasks = Vec::new();
 
-    Message::encode(&message, &mut buf)?;
+    for i in 0..num_requests {
+        let endpoint_clone = Arc::clone(&endpoint);
+        let message_clone = Arc::clone(&message);
 
-    send.write_all(&buf).await?;
+        let task = tokio::spawn(async move {
+            // برای هر تسک، یک پیام با sequence یا timestamp منحصر به فرد می‌سازیم
+            let mut local_message = (*message_clone).clone();
+            match &mut local_message.payload {
+                Some(Payload::CanvasCommand(cmd)) => {
+                    cmd.timestamp_ms = SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as i64;
+                }
+                Some(Payload::AudioChunk(chunk)) => {
+                    chunk.sequence = i as i64;
+                }
+                None => {}
+            }
+            
+            // ارسال درخواست
+            if let Err(e) = send_single_request(&endpoint_clone, server_addr, &local_message).await {
+                eprintln!("[Request {}] Failed: {}", i, e);
+            }
+        });
 
-    // متد .finish() دیگر Future نیست و نباید await شود.
-    send.finish()?;
+        tasks.push(task);
+    }
 
-    println!("[Client] Message sent successfully.");
+    // منتظر می‌مانیم تا تمام تسک‌ها تمام شوند
+    for task in tasks {
+        task.await?;
+    }
 
-    // بستن اتصال
-    conn.close(0u32.into(), b"done");
+    let duration = start_time.elapsed();
+    println!("\n✅ Test finished!");
+    println!("--------------------");
+    println!("Total requests: {}", num_requests);
+    println!("Total time: {:?}", duration);
+    println!(
+        "Requests per second: {:.2}",
+        num_requests as f64 / duration.as_secs_f64()
+    );
+
+    // Endpoint را به صورت دستی می‌بندیم
     endpoint.wait_idle().await;
 
     Ok(())
@@ -94,15 +155,12 @@ async fn main() -> Result<()> {
 
 /// کانفیگ کلاینت برای پذیرش گواهی‌نامه self-signed سرور
 fn configure_client() -> Result<ClientConfig> {
-    // کانفیگ rustls را می‌سازیم و سپس آن را برای quinn آماده می‌کنیم
     let crypto = rustls::ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(SkipServerVerification))
         .with_no_client_auth();
 
-    // کانفیگ rustls را به یک کانفیگ سازگار با quinn تبدیل می‌کنیم
     let quic_crypto = QuicClientConfig::try_from(crypto)?;
-
     Ok(ClientConfig::new(Arc::new(quic_crypto)))
 }
 

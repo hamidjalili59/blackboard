@@ -1,113 +1,178 @@
-// // این یک تست یکپارچه‌سازی است.
-// // برای اجرای آن از دستور `cargo test` استفاده کنید.
+use anyhow::Result;
+use black_board_back::proto::{
+    client_to_server::Payload, AudioChunk, CanvasCommand, ClientToServer,
+};
+use prost::Message;
+use quinn::{ClientConfig, Endpoint, ServerConfig};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
+use tokio::sync::oneshot;
 
-// use anyhow::Result;
-// use prost::Message;
-// use quinn::{rustls, ClientConfig, Endpoint};
-// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-// use std::sync::Arc;
-// use std::time::Duration;
+// وارد کردن انواع داده‌ای مورد نیاز از کتابخانه‌ها
+use quinn::crypto::rustls::QuicClientConfig;
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
+use rustls::{crypto, DigitallySignedStruct, SignatureScheme};
 
-// // کدهای ماژول اصلی را وارد می‌کنیم تا به پیام‌های protobuf دسترسی داشته باشیم
-// mod server_logic {
-//     // این یک ترفند برای دسترسی به کدهای main.rs در تست است
-//     // توجه: این فایل باید در ریشه پروژه باشد تا کار کند
-//     include!("../src/main.rs");
-// }
+// --- بخش سرور برای تست ---
 
-// use server_logic::proto::{client_to_server::Payload, AudioChunk, CanvasCommand, ClientToServer};
+/// یک سرور تست را در پس‌زمینه اجرا کرده و آدرس آن را برمی‌گرداند
+async fn spawn_test_server() -> Result<SocketAddr> {
+    // نصب ارائه‌دهنده رمزنگاری
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
 
-// /// یک کلاینت QUIC ساده برای تست
-// async fn run_client(server_addr: SocketAddr) -> Result<()> {
-//     let client_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-//     let mut endpoint = Endpoint::client(client_addr)?;
+    // کانفیگ سرور را می‌سازیم
+    let (server_config, _) = configure_test_server_crypto()?;
+    // به سیستم‌عامل می‌گوییم یک پورت آزاد به ما اختصاص دهد
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
+    let endpoint = Endpoint::server(server_config, addr)?;
+    let server_addr = endpoint.local_addr()?;
 
-//     // کانفیگ کلاینت برای پذیرش گواهی‌نامه self-signed سرور
-//     let mut crypto = rustls::ClientConfig::builder()
-//         .with_safe_defaults()
-//         .with_custom_certificate_verifier(Arc::new(SkipServerVerification))
-//         .with_no_client_auth();
-    
-//     // پروتکل ALPN را برای QUIC تنظیم کنید
-//     crypto.alpn_protocols = vec![b"h3".to_vec()]; // یا هر پروتکل دیگری که سرور انتظار دارد
+    // یک کانال برای اطلاع از آماده شدن سرور
+    let (tx, rx) = oneshot::channel();
 
-//     endpoint.set_default_client_config(ClientConfig::new(Arc::new(crypto)));
+    // سرور را در یک تسک جدید اجرا می‌کنیم
+    tokio::spawn(async move {
+        // به محض آماده شدن، به تست اصلی اطلاع می‌دهیم
+        tx.send(()).unwrap();
+        
+        // منتظر یک اتصال از کلاینت تستی می‌مانیم
+        if let Some(conn) = endpoint.accept().await {
+            let connection = conn.await.expect("Connection failed");
 
-//     // اتصال به سرور
-//     let conn = endpoint.connect(server_addr, "localhost")?.await?;
-//     println!("[Client] Connected to server.");
+            // منتظر دو stream از کلاینت می‌مانیم (یکی برای canvas، یکی برای audio)
+            for _ in 0..2 {
+                let _ = connection.accept_bi().await;
+            }
+        }
+        // پس از دریافت اتصال، سرور تستی کار خود را تمام می‌کند
+    });
 
-//     // 1. ارسال پیام CanvasCommand
-//     let canvas_command = CanvasCommand {
-//         command_json: r#"{"type": "line", "from": [10, 20], "to": [100, 150]}"#.to_string(),
-//         timestamp_ms: 1234567890,
-//     };
-//     let client_msg_canvas = ClientToServer {
-//         payload: Some(Payload::CanvasCommand(canvas_command)),
-//     };
-//     let mut buf_canvas = Vec::new();
-//     client_msg_canvas.encode(&mut buf_canvas)?;
+    // منتظر می‌مانیم تا سرور کاملاً آماده شود
+    rx.await?;
+    Ok(server_addr)
+}
 
-//     let (mut send, _recv) = conn.open_bi().await?;
-//     send.write_all(&buf_canvas).await?;
-//     send.finish().await?; // بستن stream برای اطلاع سرور
-//     println!("[Client] Sent CanvasCommand.");
+/// کانفیگ رمزنگاری سرور را ایجاد می‌کند (کپی شده از main.rs)
+fn configure_test_server_crypto() -> Result<(ServerConfig, Vec<u8>)> {
+    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()])?;
+    let cert_der_bytes = cert.cert.der().to_vec();
+    let priv_key_der_bytes = cert.signing_key.serialize_der();
+    let cert_chain = vec![CertificateDer::from(cert_der_bytes.clone())];
+    let priv_key =
+        PrivateKeyDer::from(rustls::pki_types::PrivatePkcs8KeyDer::from(priv_key_der_bytes));
+    let server_config = ServerConfig::with_single_cert(cert_chain, priv_key)?;
+    Ok((server_config, cert_der_bytes))
+}
 
-//     // 2. ارسال پیام AudioChunk
-//     let audio_chunk = AudioChunk {
-//         data: vec![0, 1, 2, 3, 4, 5, 6, 7],
-//         sequence: 1,
-//     };
-//     let client_msg_audio = ClientToServer {
-//         payload: Some(Payload::AudioChunk(audio_chunk)),
-//     };
-//     let mut buf_audio = Vec::new();
-//     client_msg_audio.encode(&mut buf_audio)?;
+// --- بخش کلاینت برای تست ---
 
-//     let (mut send, _recv) = conn.open_bi().await?;
-//     send.write_all(&buf_audio).await?;
-//     send.finish().await?;
-//     println!("[Client] Sent AudioChunk.");
-    
-//     // بستن اتصال
-//     conn.close(0u32.into(), b"done");
-//     endpoint.wait_idle().await;
+/// کانفیگ کلاینت را ایجاد می‌کند (کپی شده از client.rs)
+fn configure_test_client() -> Result<ClientConfig> {
+    let crypto = rustls::ClientConfig::builder()
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(SkipServerVerification))
+        .with_no_client_auth();
+    let quic_crypto = QuicClientConfig::try_from(crypto)?;
+    Ok(ClientConfig::new(Arc::new(quic_crypto)))
+}
 
-//     Ok(())
-// }
+/// ساختار لازم برای نادیده گرفتن اعتبارسنجی گواهی‌نامه در تست
+#[derive(Debug)]
+struct SkipServerVerification;
 
-// #[tokio::test]
-// async fn test_server_communication() {
-//     // سرور را در یک ترد جداگانه اجرا می‌کنیم
-//     tokio::spawn(async {
-//         // برای سادگی، فرض می‌کنیم سرور بدون خطا اجرا می‌شود
-//         server_logic::main().await.unwrap();
-//     });
+impl ServerCertVerifier for SkipServerVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        Ok(ServerCertVerified::assertion())
+    }
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        crypto::ring::default_provider()
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
+}
 
-//     // کمی صبر می‌کنیم تا سرور آماده شود
-//     tokio::time::sleep(Duration::from_secs(1)).await;
+// --- تابع اصلی تست ---
 
-//     let server_addr = "127.0.0.1:12345".parse().unwrap();
+#[tokio::test]
+async fn test_server_and_client_communication() {
+    // ۱. سرور تست را در پس‌زمینه اجرا می‌کنیم
+    let server_addr = spawn_test_server()
+        .await
+        .expect("Failed to start test server");
 
-//     // کلاینت را اجرا می‌کنیم
-//     let result = run_client(server_addr).await;
-//     assert!(result.is_ok(), "Client failed to run: {:?}", result.err());
-// }
+    // ۲. کلاینت را برای اتصال به سرور تست آماده می‌کنیم
+    let client_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+    let mut endpoint = Endpoint::client(client_addr).unwrap();
+    endpoint
+        .set_default_client_config(configure_test_client().unwrap());
 
+    // ۳. به سرور متصل می‌شویم
+    let conn = endpoint
+        .connect(server_addr, "localhost")
+        .unwrap()
+        .await
+        .expect("Client failed to connect");
 
-// /// یک تاییدکننده گواهی‌نامه که هر گواهی‌نامه‌ای را قبول می‌کند (فقط برای تست!)
-// struct SkipServerVerification;
+    // ۴. پیام CanvasCommand را ارسال می‌کنیم
+    println!("[Test] Sending CanvasCommand...");
+    let canvas_msg = ClientToServer {
+        payload: Some(Payload::CanvasCommand(CanvasCommand {
+            command_json: "test_command".to_string(),
+            timestamp_ms: 123,
+        })),
+    };
+    let (mut send_canvas, _) = conn.open_bi().await.unwrap();
+    let mut buf_canvas = Vec::new();
+    canvas_msg.encode(&mut buf_canvas).unwrap();
+    send_canvas.write_all(&buf_canvas).await.unwrap();
+    send_canvas.finish().unwrap();
+    println!("[Test] CanvasCommand sent.");
 
-// impl rustls::client::ServerCertVerifier for SkipServerVerification {
-//     fn verify_server_cert(
-//         &self,
-//         _end_entity: &rustls::Certificate,
-//         _intermediates: &[rustls::Certificate],
-//         _server_name: &rustls::ServerName,
-//         _scts: &mut dyn Iterator<Item = &[u8]>,
-//         _ocsp_response: &[u8],
-//         _now: std::time::SystemTime,
-//     ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
-//         Ok(rustls::client::ServerCertVerified::assertion())
-//     }
-// }
+    // ۵. پیام AudioChunk را ارسال می‌کنیم
+    println!("[Test] Sending AudioChunk...");
+    let audio_msg = ClientToServer {
+        payload: Some(Payload::AudioChunk(AudioChunk {
+            data: vec![1, 2, 3],
+            sequence: 1,
+        })),
+    };
+    let (mut send_audio, _) = conn.open_bi().await.unwrap();
+    let mut buf_audio = Vec::new();
+    audio_msg.encode(&mut buf_audio).unwrap();
+    send_audio.write_all(&buf_audio).await.unwrap();
+    send_audio.finish().unwrap();
+    println!("[Test] AudioChunk sent.");
+
+    // ۶. اتصال را می‌بندیم
+    conn.close(0u32.into(), b"test done");
+    endpoint.wait_idle().await;
+
+    // اگر کد به اینجا برسد، یعنی تمام مراحل بدون خطا انجام شده و تست موفقیت‌آمیز است.
+    println!("[Test] Communication successful!");
+}
