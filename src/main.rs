@@ -5,8 +5,6 @@ use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tracing::{error, info, Level};
 use tracing_subscriber;
-
-// اصلاح شد: از کلمه کلیدی `crate` برای ارجاع به کتابخانه همین پروژه استفاده می‌کنیم
 use black_board_back::proto::{
     client_to_server::Payload, ClientToServer,
 };
@@ -17,19 +15,13 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     info!("Starting QUIC server...");
-
-    // آدرس و پورتی که سرور روی آن گوش می‌دهد
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 12345);
 
-    // ساخت گواهی‌نامه self-signed برای ارتباط امن QUIC
     let (server_config, _cert_der) = configure_server()?;
 
-    // ساخت یک endpoint برای سرور
     let endpoint = Endpoint::server(server_config, addr)?;
 
     info!("Listening on {}", addr);
-
-    // حلقه اصلی برای پذیرش اتصالات جدید
     while let Some(conn) = endpoint.accept().await {
         info!("New connection attempt...");
         tokio::spawn(async move {
@@ -50,11 +42,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// مدیریت یک اتصال برقرار شده از کلاینت
 async fn handle_connection(connection: Connection) -> Result<()> {
     let remote_addr = connection.remote_address();
-
-    // حلقه برای پذیرش stream های دوطرفه از کلاینت
     loop {
         match connection.accept_bi().await {
             Ok((_send_stream, mut recv_stream)) => {
@@ -81,14 +70,11 @@ async fn handle_connection(connection: Connection) -> Result<()> {
 
 /// خواندن و پردازش داده‌ها از یک stream
 async fn handle_stream(recv_stream: &mut quinn::RecvStream) -> Result<()> {
-    // خواندن داده‌ها از stream تا زمانی که بسته شود
     let data = recv_stream.read_to_end(65536).await?;
     info!("Received {} bytes of data.", data.len());
 
-    // دیکود کردن پیام Protobuf
     let message = ClientToServer::decode(&data[..])?;
 
-    // پردازش پیام بر اساس نوع آن (oneof)
     if let Some(payload) = message.payload {
         match payload {
             Payload::CanvasCommand(cmd) => {
@@ -112,7 +98,6 @@ async fn handle_stream(recv_stream: &mut quinn::RecvStream) -> Result<()> {
     Ok(())
 }
 
-/// ساخت کانفیگ سرور با یک گواهی‌نامه self-signed
 fn configure_server() -> Result<(ServerConfig, Vec<u8>)> {
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()])?;
     
