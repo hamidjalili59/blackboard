@@ -9,6 +9,9 @@ use black_board_back::proto::{
     client_to_server::Payload, ClientToServer,
 };
 
+use std::fs::File;
+use std::io::Write;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // راه‌اندازی سیستم لاگ برای نمایش اطلاعات در کنسول
@@ -18,6 +21,11 @@ async fn main() -> Result<()> {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 12345);
 
     let (server_config, _cert_der) = configure_server()?;
+
+    info!("Saving server certificate to cert.der");
+    let mut cert_file = File::create("cert.der")?;
+    cert_file.write_all(&_cert_der)?;
+    info!("Certificate saved successfully.");
 
     let endpoint = Endpoint::server(server_config, addr)?;
 

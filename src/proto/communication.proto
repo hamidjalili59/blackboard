@@ -2,8 +2,7 @@ syntax = "proto3";
 
 package communication;
 
-// پیام اصلی که از کلاینت به سرور ارسال می‌شود.
-// از oneof برای اطمینان از ارسال تنها یکی از انواع پیام در هر بار استفاده می‌شود.
+// از کلاینت به سرور
 message ClientToServer {
   oneof payload {
     CanvasCommand canvas_command = 1;
@@ -11,18 +10,20 @@ message ClientToServer {
   }
 }
 
-// یک دستور نقاشی روی canvas را نمایش می‌دهد.
+// از سرور به کلاینت (این بخش جدید است)
+message ServerToClient {
+  oneof payload {
+    string server_event = 1; // برای مثال، یک رویداد متنی
+    bytes data_payload = 2; // یا یک محموله داده باینری
+  }
+}
+
 message CanvasCommand {
-  // دستور نقاشی، برای مثال در قالب یک رشته JSON.
   string command_json = 1;
-  // زمان ایجاد دستور به میلی‌ثانیه از مبدا یونیکس.
   int64 timestamp_ms = 2;
 }
 
-// یک قطعه از داده صوتی را نمایش می‌دهد.
 message AudioChunk {
-  // داده خام صوتی.
   bytes data = 1;
-  // شماره ترتیب برای مرتب‌سازی قطعات صوتی.
   int64 sequence = 2;
 }
