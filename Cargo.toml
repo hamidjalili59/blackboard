@@ -12,11 +12,6 @@ path = "src/lib.rs"
 name = "server"
 path = "src/main.rs"
 
-# تعریف صریح باینری کلاینت
-[[bin]]
-name = "client"
-path = "src/bin/client.rs"
-
 [dependencies]
 anyhow = "1.0.98"
 bytes = "1.10.1"
@@ -29,6 +24,9 @@ thiserror = "2.0.12"
 tokio = { version = "1.46.1", features = ["full", "macros"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
+uuid = { version = "1.10.0", features = ["v4"] }
+rand = "0.9.2"
+chrono = { version = "0.4", features = ["serde"] }
 
 [build-dependencies]
 prost-build = "0.14.1"

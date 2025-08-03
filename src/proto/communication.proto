@@ -2,19 +2,48 @@ syntax = "proto3";
 
 package communication;
 
-// از کلاینت به سرور
+// ===================================================================
+// پیام‌های کلاینت به سرور (Client to Server)
+// ===================================================================
+
+// پیام اصلی که از کلاینت به سرور ارسال می‌شود.
 message ClientToServer {
   oneof payload {
-    CanvasCommand canvas_command = 1;
-    AudioChunk audio_chunk = 2;
+    // پیام‌های مربوط به مدیریت اتاق در ابتدای اتصال
+    InitialRequest initial_request = 1;
+
+    // پیام‌های مربوط به داده‌های داخل اتاق پس از اتصال موفق
+    RoomMessage room_message = 2;
   }
 }
 
-// از سرور به کلاینت (این بخش جدید است)
-message ServerToClient {
+// پیام‌هایی که کلاینت در ابتدای اتصال برای مدیریت اتاق ارسال می‌کند
+message InitialRequest {
+    oneof request_type {
+        CreateRoomRequest create_room = 1;
+        JoinRoomRequest join_room = 2;
+    }
+}
+
+// درخواست برای ایجاد یک اتاق جدید
+message CreateRoomRequest {
+    // نام کاربر برای نمایش به دیگران
+    string username = 1;
+}
+
+// درخواست برای پیوستن به یک اتاق موجود
+message JoinRoomRequest {
+    // شناسه‌ی اتاقی که کاربر می‌خواهد به آن بپیوندد
+    string room_id = 1;
+    // نام کاربر برای نمایش به دیگران
+    string username = 2;
+}
+
+// پیام‌های مربوط به تبادل داده داخل اتاق
+message RoomMessage {
   oneof payload {
-    string server_event = 1; // برای مثال، یک رویداد متنی
-    bytes data_payload = 2; // یا یک محموله داده باینری
+    CanvasCommand canvas_command = 1;
+    AudioChunk audio_chunk = 2;
   }
 }
 
@@ -26,4 +55,81 @@ message CanvasCommand {
 message AudioChunk {
   bytes data = 1;
   int64 sequence = 2;
+}
+
+
+// ===================================================================
+// پیام‌های سرور به کلاینت (Server to Client)
+// ===================================================================
+
+// پیام اصلی که از سرور به کلاینت ارسال می‌شود.
+message ServerToClient {
+    oneof payload {
+        // پاسخ به درخواست‌های اولیه
+        InitialResponse initial_response = 1;
+
+        // رویدادها و داده‌های پخش شده در اتاق
+        RoomEvent room_event = 2;
+    }
+}
+
+// پاسخ به درخواست‌های ایجاد یا پیوستن به اتاق
+message InitialResponse {
+    oneof response_type {
+        CreateRoomResponse create_room_response = 1;
+        JoinRoomResponse join_room_response = 2;
+        ErrorResponse error_response = 3;
+    }
+}
+
+// پاسخ موفقیت‌آمیز به درخواست ایجاد اتاق
+message CreateRoomResponse {
+    // شناسه‌ی منحصر به فرد اتاق جدید که سرور ایجاد کرده است
+    string room_id = 1;
+}
+
+// پاسخ موفقیت‌آمیز به درخواست پیوستن به اتاق
+message JoinRoomResponse {
+    // پیام خوش‌آمدگویی یا اطلاعات اولیه اتاق
+    string message = 1;
+}
+
+// پاسخ در صورت بروز خطا
+message ErrorResponse {
+    // شرح خطا
+    string message = 1;
+}
+
+// رویدادهایی که در اتاق رخ می‌دهد و به همه اعضا پخش می‌شود
+message RoomEvent {
+    oneof event_type {
+        // یک کاربر جدید به اتاق پیوسته است
+        UserJoined user_joined = 1;
+        // یک کاربر اتاق را ترک کرده است
+        UserLeft user_left = 2;
+        // یک پیام canvas جدید ارسال شده است
+        BroadcastedCanvasCommand canvas_command = 3;
+        // یک قطعه صدای جدید ارسال شده است
+        BroadcastedAudioChunk audio_chunk = 4;
+    }
+}
+
+message UserJoined {
+    string client_id = 1;
+    string username = 2;
+}
+
+message UserLeft {
+    string client_id = 1;
+    string username = 2;
+}
+
+message BroadcastedCanvasCommand {
+    string from_client_id = 1;
+    CanvasCommand command = 2;
+}
+
+message BroadcastedAudioChunk {
+    string from_client_id = 1;
+    AudioChunk chunk = 2;
 }

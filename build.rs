@@ -1,8 +1,10 @@
-// این اسکریپت در زمان بیلد اجرا می‌شود تا فایل پروتوباف را به کد راست تبدیل کند.
+// build.rs
+
 fn main() -> Result<(), std::io::Error> {
-    // با حذف کردن خط .out_dir()، فایل تولید شده به صورت خودکار در مسیر OUT_DIR
-    // که توسط Cargo مدیریت می‌شود قرار می‌گیرد. این کار مشکل "file not found" را حل می‌کند.
+    // تمام تنظیمات مربوط به serde حذف شده است
+    // و فقط کانفیگ پایه prost باقی مانده.
     prost_build::Config::new()
         .compile_protos(&["src/proto/communication.proto"], &["src/proto/"])?;
+
     Ok(())
 }
