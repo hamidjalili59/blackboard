@@ -1,0 +1,44 @@
+[package]
+name = "rust_lib_black_board_mobile"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+# برای ساخت کتابخانه داینامیک برای پلتفرم‌های مختلف
+crate-type = ["cdylib"]
+
+[dependencies]
+# --- وابستگی‌های اصلی شما (بدون تغییر) ---
+flutter_rust_bridge = "=2.11.1"
+anyhow = "1.0.98"
+bytes = "1.10.1"
+prost = "0.14.1"
+quinn = { version = "0.11.8", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rustls = { version = "0.23.31", default-features = false, features = ["ring", "tls12"] }
+rustls-pki-types = "1.12.0"
+thiserror = "2.0.12"
+tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros", "sync"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+lazy_static = "1.5.0"
+log = "0.4.27"
+android_logger = "0.15.1"
+once_cell = "1.21.3"
+
+# --- وابستگی‌های ضروری اضافه شده ---
+# برای استریم کردن رویدادها به فلاتر از طریق StreamSink
+futures = "0.3.30"
+# برای تبدیل ساختارهای داده رویدادها به رشته JSON جهت ارسال به فلاتر
+# این ساده‌ترین راه برای ارسال داده‌های پیچیده به Dart است.
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+
+[build-dependencies]
+prost-build = "0.14.1"
+# برای تولید خودکار کد Dart از روی کد Rust شما
+flutter_rust_bridge_codegen = "=2.11.1"
+
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

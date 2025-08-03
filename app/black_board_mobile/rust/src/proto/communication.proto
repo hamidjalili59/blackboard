@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package communication;
+
+// ===================================================================
+// پیام‌های کلاینت به سرور (Client to Server)
+// ===================================================================
+
+message ClientToServer {
+  oneof payload {
+    InitialRequest initial_request = 1;
+    RoomMessage room_message = 2;
+  }
+}
+
+message InitialRequest {
+    oneof request_type {
+        CreateRoomRequest create_room = 1;
+        JoinRoomRequest join_room = 2;
+    }
+}
+
+message CreateRoomRequest {
+    string username = 1;
+}
+
+message JoinRoomRequest {
+    string room_id = 1;
+    string username = 2;
+}
+
+message RoomMessage {
+  oneof payload {
+    CanvasCommand canvas_command = 1;
+    AudioChunk audio_chunk = 2;
+  }
+}
+
+message CanvasCommand {
+  string command_json = 1;
+  int64 timestamp_ms = 2;
+}
+
+message AudioChunk {
+  bytes data = 1;
+  int64 sequence = 2;
+}
+
+
+// ===================================================================
+// پیام‌های سرور به کلاینت (Server to Client)
+// ===================================================================
+
+message ServerToClient {
+    oneof payload {
+        InitialResponse initial_response = 1;
+        RoomEvent room_event = 2;
+    }
+}
+
+message InitialResponse {
+    oneof response_type {
+        CreateRoomResponse create_room_response = 1;
+        JoinRoomResponse join_room_response = 2;
+        ErrorResponse error_response = 3;
+    }
+}
+
+message CreateRoomResponse {
+    string room_id = 1;
+}
+
+message JoinRoomResponse {
+    string message = 1;
+}
+
+message ErrorResponse {
+    string message = 1;
+}
+
+message RoomEvent {
+    oneof event_type {
+        UserJoined user_joined = 1;
+        UserLeft user_left = 2;
+        BroadcastedCanvasCommand canvas_command = 3;
+        BroadcastedAudioChunk audio_chunk = 4;
+    }
+}
+
+message UserJoined {
+    string client_id = 1;
+    string username = 2;
+}
+
+message UserLeft {
+    string client_id = 1;
+    string username = 2;
+}
+
+message BroadcastedCanvasCommand {
+    string from_client_id = 1;
+    CanvasCommand command = 2;
+}
+
+message BroadcastedAudioChunk {
+    string from_client_id = 1;
+    AudioChunk chunk = 2;
+}
