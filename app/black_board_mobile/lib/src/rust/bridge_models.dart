@@ -21,3 +21,21 @@ class EventMessage {
           runtimeType == other.runtimeType &&
           data == other.data;
 }
+
+class Point {
+  final double dx;
+  final double dy;
+
+  const Point({required this.dx, required this.dy});
+
+  @override
+  int get hashCode => dx.hashCode ^ dy.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Point &&
+          runtimeType == other.runtimeType &&
+          dx == other.dx &&
+          dy == other.dy;
+}

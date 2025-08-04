@@ -1,21 +1,24 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use black_board_back::logger::RoomLogger;
 use black_board_back::proto::{
-    BroadcastedAudioChunk, BroadcastedCanvasCommand, ClientToServer, CreateRoomResponse,
-    ErrorResponse, InitialResponse, JoinRoomResponse, RoomEvent, RoomMessage, ServerToClient,
-    UserJoined, UserLeft, client_to_server::Payload as ClientPayload, initial_request::RequestType,
+    self, BroadcastedAudioChunk, BroadcastedCanvasCommand, ClientToServer, CreateRoomResponse,
+    ErrorResponse, HostEndedSession, InitialResponse, JoinRoomResponse, RoomEvent, RoomMessage,
+    ServerToClient, UserJoined, UserLeft, canvas_command,
+    client_to_server::Payload as ClientPayload, initial_request::RequestType,
     initial_response::ResponseType, room_event::EventType,
     room_message::Payload as RoomMessagePayload, server_to_client::Payload as ServerPayload,
 };
 use black_board_back::state::{Participant, Room, ServerState};
 use prost::Message;
-use quinn::{Connection, Endpoint, RecvStream, ServerConfig};
+use quinn::{Connection, Endpoint, RecvStream, SendStream, ServerConfig, TransportConfig};
 use rand::Rng;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::fs::File;
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
+use tokio::fs::File as TokioFile;
+use tokio::io::{AsyncReadExt, BufReader};
 use tokio::sync::{Mutex, broadcast};
 use tracing::{Level, error, info, warn};
 use uuid::Uuid;
@@ -68,113 +71,175 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
     let data = recv_stream.read_to_end(1024).await?;
     let message = ClientToServer::decode(&data[..])?;
 
-    let (room_id, client_id, username) =
-        if let Some(ClientPayload::InitialRequest(initial_request)) = message.payload {
-            match initial_request.request_type {
-                Some(RequestType::CreateRoom(req)) => {
-                    info!("Received CreateRoomRequest from user: {}", req.username);
-                    let client_id = Uuid::new_v4();
-                    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNPQRSTUVWXYZ123456789";
-                    let room_id: String = (0..6)
-                        .map(|_| {
-                            let idx = rand::rng().random_range(0..CHARSET.len());
-                            CHARSET[idx] as char
-                        })
-                        .collect();
+    if let Some(ClientPayload::InitialRequest(initial_request)) = message.payload {
+        match initial_request.request_type {
+            Some(RequestType::CreateRoom(req)) => {
+                let client_id = Uuid::new_v4();
+                const CHARSET: &[u8] = b"ABCDEFGHIJKLMNPQRSTUVWXYZ123456789";
+                let room_id: String = (0..6)
+                    .map(|_| {
+                        let idx = rand::thread_rng().gen_range(0..CHARSET.len());
+                        CHARSET[idx] as char
+                    })
+                    .collect();
 
-                    let logger = RoomLogger::new(&room_id)?;
-                    let new_room = Room::new(room_id.clone());
-                    let mut log_receiver = new_room.broadcast_sender.subscribe();
+                let logger = RoomLogger::new(&room_id)?;
+                let mut new_room = Room::new(room_id.clone(), client_id);
+                let mut log_receiver = new_room.broadcast_sender.subscribe();
 
-                    // تسک لاگر را در یک ترد مجزا اجرا می‌کنیم
-                    let logger_room_id = room_id.clone();
-                    tokio::spawn(async move {
-                        // *** رفع خطا: این خط اصلاح شد تا به فیلد خصوصی دسترسی پیدا نکند ***
-                        info!("Logger task started for room {}", logger_room_id);
-
-                        while let Ok(event) = log_receiver.recv().await {
-                            if let Err(e) = logger.log(&event).await {
-                                error!("Failed to log event for room {}: {}", logger_room_id, e);
-                            }
+                let logger_room_id = room_id.clone();
+                tokio::spawn(async move {
+                    info!("Logger task started for room {}", logger_room_id);
+                    while let Ok(event) = log_receiver.recv().await {
+                        if let Err(e) = logger.log(&event).await {
+                            error!("Failed to log event for room {}: {}", logger_room_id, e);
                         }
-                        info!("Logger task finished for room {}", logger_room_id);
-                    });
-
-                    {
-                        let mut state_guard = state.lock().await;
-                        state_guard.rooms.insert(room_id.clone(), new_room);
-                        info!("New room '{}' and its logger have been created.", room_id);
                     }
+                    info!("Logger task finished for room {}", logger_room_id);
+                });
 
-                    let response = ServerToClient {
-                        payload: Some(ServerPayload::InitialResponse(InitialResponse {
-                            response_type: Some(ResponseType::CreateRoomResponse(
-                                CreateRoomResponse {
-                                    room_id: room_id.clone(),
-                                },
-                            )),
+                {
+                    let mut state_guard = state.lock().await;
+                    state_guard.rooms.insert(room_id.clone(), new_room);
+                    info!("New room '{}' created by host {}.", room_id, client_id);
+                }
+
+                let response = ServerToClient {
+                    payload: Some(ServerPayload::InitialResponse(InitialResponse {
+                        response_type: Some(ResponseType::CreateRoomResponse(CreateRoomResponse {
+                            room_id: room_id.clone(),
+                        })),
+                    })),
+                };
+                send_stream.write_all(&response.encode_to_vec()).await?;
+                send_stream.finish()?;
+
+                return handle_participant_session(
+                    connection,
+                    state,
+                    room_id,
+                    client_id,
+                    req.username,
+                )
+                .await;
+            }
+            Some(RequestType::JoinRoom(req)) => {
+                let client_id = Uuid::new_v4();
+                let history_to_send;
+                {
+                    let mut state_guard = state.lock().await;
+                    let room = match state_guard.rooms.get_mut(&req.room_id) {
+                        Some(r) => r,
+                        None => {
+                            warn!("Room '{}' not found.", req.room_id);
+                            let response = ServerToClient {
+                                payload: Some(ServerPayload::InitialResponse(InitialResponse {
+                                    response_type: Some(ResponseType::ErrorResponse(
+                                        ErrorResponse {
+                                            message: format!(
+                                                "Room with ID '{}' not found.",
+                                                req.room_id
+                                            ),
+                                        },
+                                    )),
+                                })),
+                            };
+                            send_stream.write_all(&response.encode_to_vec()).await?;
+                            return Err(anyhow!("Room not found"));
+                        }
+                    };
+                    history_to_send = room.canvas_history.clone();
+                }
+
+                let response = ServerToClient {
+                    payload: Some(ServerPayload::InitialResponse(InitialResponse {
+                        response_type: Some(ResponseType::JoinRoomResponse(JoinRoomResponse {
+                            message: format!("Successfully joined room {}", req.room_id),
+                        })),
+                    })),
+                };
+                send_stream.write_all(&response.encode_to_vec()).await?;
+                send_stream.finish()?;
+
+                info!(
+                    "Sending {} historical full paths to new user {}",
+                    history_to_send.len(),
+                    client_id
+                );
+                for cmd in history_to_send {
+                    let event = RoomEvent {
+                        event_type: Some(EventType::CanvasCommand(BroadcastedCanvasCommand {
+                            from_client_id: "history".to_string(),
+                            command: Some(cmd),
                         })),
                     };
-                    let mut buf = Vec::new();
-                    response.encode(&mut buf)?;
-                    send_stream.write_all(&buf).await?;
-
-                    (room_id, client_id, req.username)
+                    let message = ServerToClient {
+                        payload: Some(ServerPayload::RoomEvent(event)),
+                    };
+                    let mut uni_stream = connection.open_uni().await?;
+                    uni_stream.write_all(&message.encode_to_vec()).await?;
+                    uni_stream.finish()?;
                 }
-                Some(RequestType::JoinRoom(req)) => {
-                    info!(
-                        "Received JoinRoomRequest for room '{}' from user: '{}'",
-                        req.room_id, req.username
-                    );
-                    let client_id = Uuid::new_v4();
-                    let state_guard = state.lock().await;
 
-                    if state_guard.rooms.contains_key(&req.room_id) {
-                        let response = ServerToClient {
-                            payload: Some(ServerPayload::InitialResponse(InitialResponse {
-                                response_type: Some(ResponseType::JoinRoomResponse(
-                                    JoinRoomResponse {
-                                        message: format!(
-                                            "Successfully joined room {}",
-                                            req.room_id
-                                        ),
-                                    },
-                                )),
-                            })),
-                        };
-                        let mut buf = Vec::new();
-                        response.encode(&mut buf)?;
-                        send_stream.write_all(&buf).await?;
-
-                        (req.room_id, client_id, req.username)
-                    } else {
-                        warn!("Room '{}' not found.", req.room_id);
-                        let response = ServerToClient {
-                            payload: Some(ServerPayload::InitialResponse(InitialResponse {
-                                response_type: Some(ResponseType::ErrorResponse(ErrorResponse {
-                                    message: format!("Room with ID '{}' not found.", req.room_id),
-                                })),
-                            })),
-                        };
-                        let mut buf = Vec::new();
-                        response.encode(&mut buf)?;
-                        send_stream.write_all(&buf).await?;
-                        return Err(anyhow!("Room not found"));
-                    }
-                }
-                None => return Err(anyhow!("Invalid initial request type")),
+                return handle_participant_session(
+                    connection,
+                    state,
+                    req.room_id,
+                    client_id,
+                    req.username,
+                )
+                .await;
             }
-        } else {
-            return Err(anyhow!("First message was not an InitialRequest"));
+            Some(RequestType::ReplayRoom(req)) => {
+                info!("Received ReplayRoomRequest for log: {}", req.log_filename);
+                send_stream.finish()?;
+                return handle_replay_request(connection, req.log_filename).await;
+            }
+            None => return Err(anyhow!("Invalid initial request type")),
+        }
+    } else {
+        return Err(anyhow!("First message was not an InitialRequest"));
+    }
+}
+
+async fn handle_replay_request(connection: Connection, log_filename: String) -> Result<()> {
+    let file_path = std::path::Path::new("records").join(&log_filename);
+
+    if !file_path.exists() {
+        bail!("Log file not found: {}", log_filename);
+    }
+
+    let file = TokioFile::open(file_path).await?;
+    let mut reader = BufReader::new(file);
+
+    loop {
+        let len_result = reader.read_u32().await;
+        let len = match len_result {
+            Ok(l) => l as usize,
+            Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                info!("Finished streaming log file: {}", log_filename);
+                break;
+            }
+            Err(e) => return Err(e.into()),
         };
 
-    send_stream.finish()?;
+        let mut event_buf = vec![0; len];
+        reader.read_exact(&mut event_buf).await?;
 
-    info!(
-        "Handshake successful. Starting session for user '{}' ({}) in room '{}'",
-        username, client_id, room_id
-    );
-    handle_participant_session(connection, state, room_id, client_id, username).await
+        let event = proto::RoomEvent::decode(&event_buf[..])?;
+        let message_to_send = ServerToClient {
+            payload: Some(ServerPayload::RoomEvent(event)),
+        };
+
+        let mut send_stream = connection.open_uni().await?;
+        send_stream
+            .write_all(&message_to_send.encode_to_vec())
+            .await?;
+        send_stream.finish()?;
+    }
+
+    connection.close(0u32.into(), b"replay_finished");
+    Ok(())
 }
 
 async fn handle_participant_session(
@@ -261,8 +326,18 @@ async fn handle_participant_session(
         match connection.accept_bi().await {
             Ok((_send, mut recv)) => {
                 let sender = broadcast_sender.clone();
+                let state_clone = state.clone();
+                let room_id_clone = room_id.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = process_client_stream(&mut recv, &sender, client_id).await {
+                    if let Err(e) = process_client_stream(
+                        &mut recv,
+                        &sender,
+                        client_id,
+                        state_clone,
+                        &room_id_clone,
+                    )
+                    .await
+                    {
                         warn!("Failed to process stream from client {}: {}", client_id, e);
                     }
                 });
@@ -280,13 +355,21 @@ async fn handle_participant_session(
     {
         let mut state_guard = state.lock().await;
         if let Some(room) = state_guard.rooms.get_mut(&room_id) {
-            room.participants.remove(&client_id);
-            info!("Removed client {} from room {}", client_id, room_id);
-
-            if room.participants.is_empty() {
-                info!("Room {} is now empty and will be removed.", room_id);
+            if client_id == room.host_id {
+                info!(
+                    "Host {} has left room {}. Ending session for all.",
+                    client_id, room_id
+                );
+                let end_event = RoomEvent {
+                    event_type: Some(EventType::HostEndedSession(HostEndedSession {
+                        message: "The host has ended the session.".to_string(),
+                    })),
+                };
+                let _ = room.broadcast_sender.send(end_event);
                 state_guard.rooms.remove(&room_id);
             } else {
+                room.participants.remove(&client_id);
+                info!("Removed client {} from room {}", client_id, room_id);
                 let leave_event = RoomEvent {
                     event_type: Some(EventType::UserLeft(UserLeft {
                         client_id: client_id.to_string(),
@@ -305,6 +388,8 @@ async fn process_client_stream(
     recv_stream: &mut RecvStream,
     broadcast_sender: &broadcast::Sender<RoomEvent>,
     client_id: Uuid,
+    state: SharedServerState,
+    room_id: &str,
 ) -> Result<()> {
     let data = recv_stream.read_to_end(65536).await?;
     let message = ClientToServer::decode(&data[..])?;
@@ -313,25 +398,29 @@ async fn process_client_stream(
         payload: Some(payload),
     })) = message.payload
     {
+        if let RoomMessagePayload::CanvasCommand(ref cmd) = payload {
+            if let Some(canvas_command::CommandType::PathFull(_)) = &cmd.command_type {
+                let mut state_guard = state.lock().await;
+                if let Some(room) = state_guard.rooms.get_mut(room_id) {
+                    info!("Storing a full path in history for room {}", room_id);
+                    room.canvas_history.push(cmd.clone());
+                }
+            }
+        }
+
         let event = match payload {
-            RoomMessagePayload::CanvasCommand(cmd) => {
-                info!("Broadcasting CanvasCommand from {}", client_id);
-                RoomEvent {
-                    event_type: Some(EventType::CanvasCommand(BroadcastedCanvasCommand {
-                        from_client_id: client_id.to_string(),
-                        command: Some(cmd),
-                    })),
-                }
-            }
-            RoomMessagePayload::AudioChunk(chunk) => {
-                info!("Broadcasting AudioChunk from {}", client_id);
-                RoomEvent {
-                    event_type: Some(EventType::AudioChunk(BroadcastedAudioChunk {
-                        from_client_id: client_id.to_string(),
-                        chunk: Some(chunk),
-                    })),
-                }
-            }
+            RoomMessagePayload::CanvasCommand(cmd) => RoomEvent {
+                event_type: Some(EventType::CanvasCommand(BroadcastedCanvasCommand {
+                    from_client_id: client_id.to_string(),
+                    command: Some(cmd),
+                })),
+            },
+            RoomMessagePayload::AudioChunk(chunk) => RoomEvent {
+                event_type: Some(EventType::AudioChunk(BroadcastedAudioChunk {
+                    from_client_id: client_id.to_string(),
+                    chunk: Some(chunk),
+                })),
+            },
         };
         broadcast_sender.send(event)?;
     }
@@ -346,6 +435,12 @@ fn configure_server() -> Result<(ServerConfig, Vec<u8>)> {
     let priv_key = PrivateKeyDer::from(rustls_pki_types::PrivatePkcs8KeyDer::from(
         priv_key_der_bytes,
     ));
-    let server_config = ServerConfig::with_single_cert(cert_chain, priv_key)?;
+
+    let mut transport = TransportConfig::default();
+    transport.max_idle_timeout(Some(std::time::Duration::from_secs(3600 * 24).try_into()?));
+
+    let mut server_config = ServerConfig::with_single_cert(cert_chain, priv_key)?;
+    server_config.transport = Arc::new(transport);
+
     Ok((server_config, cert_der_bytes))
 }

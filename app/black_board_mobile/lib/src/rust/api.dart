@@ -10,7 +10,6 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CLIENT_STATE`, `TOKIO_RUNTIME`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
 
-/// Creates a room and returns its ID. Does not start streaming events.
 Future<String> createRoom({
   required String serverAddr,
   required String username,
@@ -19,7 +18,6 @@ Future<String> createRoom({
   username: username,
 );
 
-/// Joins an existing room. Does not start streaming events.
 Future<void> joinRoom({
   required String serverAddr,
   required String username,
@@ -30,16 +28,42 @@ Future<void> joinRoom({
   roomId: roomId,
 );
 
-/// Starts listening for events on the current connection and streams them to Flutter.
 Stream<EventMessage> listenEvents() =>
     RustLib.instance.api.crateApiListenEvents();
 
-Future<void> sendCanvasCommand({
-  required String commandJson,
-  required PlatformInt64 timestampMs,
-}) => RustLib.instance.api.crateApiSendCanvasCommand(
-  commandJson: commandJson,
-  timestampMs: timestampMs,
+Stream<EventMessage> replayRoom({
+  required String serverAddr,
+  required String logFilename,
+}) => RustLib.instance.api.crateApiReplayRoom(
+  serverAddr: serverAddr,
+  logFilename: logFilename,
+);
+
+Future<void> startPath({
+  required String id,
+  required Point point,
+  required int color,
+  required double strokeWidth,
+}) => RustLib.instance.api.crateApiStartPath(
+  id: id,
+  point: point,
+  color: color,
+  strokeWidth: strokeWidth,
+);
+
+Future<void> appendToPath({required String id, required Point point}) =>
+    RustLib.instance.api.crateApiAppendToPath(id: id, point: point);
+
+Future<void> finishPath({
+  required String id,
+  required List<Point> points,
+  required int color,
+  required double strokeWidth,
+}) => RustLib.instance.api.crateApiFinishPath(
+  id: id,
+  points: points,
+  color: color,
+  strokeWidth: strokeWidth,
 );
 
 Future<void> sendAudioChunk({

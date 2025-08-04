@@ -1,10 +1,13 @@
 use crate::bridge_models::EventMessage;
 use crate::frb_generated::StreamSink;
 use crate::proto::{
-    client_to_server::Payload as ClientPayload, initial_request::RequestType,
-    initial_response::ResponseType, room_message::Payload as RoomMessagePayload,
-    server_to_client::Payload as ServerPayload, ClientToServer, CreateRoomRequest, InitialRequest,
-    JoinRoomRequest, RoomMessage, ServerToClient,
+    client_to_server::Payload as ClientPayload,
+    initial_request::RequestType,
+    initial_response::ResponseType,
+    room_message::Payload as RoomMessagePayload,
+    server_to_client::Payload as ServerPayload,
+    ClientToServer, CreateRoomRequest, InitialRequest, JoinRoomRequest, ReplayRoomRequest,
+    RoomMessage, ServerToClient,
 };
 use anyhow::{anyhow, bail, Result};
 use prost::Message;
@@ -68,12 +71,7 @@ impl ClientState {
         }
     }
 
-    pub async fn join_room(
-        &mut self,
-        server_addr: String,
-        username: String,
-        room_id: String,
-    ) -> Result<()> {
+    pub async fn join_room(&mut self, server_addr: String, username: String, room_id: String) -> Result<()> {
         let server_socket_addr = server_addr.parse()?;
         let conn = self
             .endpoint
@@ -85,7 +83,10 @@ impl ClientState {
 
         let request = ClientToServer {
             payload: Some(ClientPayload::InitialRequest(InitialRequest {
-                request_type: Some(RequestType::JoinRoom(JoinRoomRequest { username, room_id })),
+                request_type: Some(RequestType::JoinRoom(JoinRoomRequest {
+                    username,
+                    room_id,
+                })),
             })),
         };
         send.write_all(&request.encode_to_vec()).await?;
@@ -109,18 +110,42 @@ impl ClientState {
         }
     }
 
-    pub async fn listen_events(
-        &self,
-        events_sink: Arc<Mutex<StreamSink<EventMessage>>>,
-    ) -> Result<()> {
+    pub async fn listen_events(&self, events_sink: Arc<Mutex<StreamSink<EventMessage>>>) -> Result<()> {
         if let Some(conn) = &self.connection {
             self.start_event_listener(conn.clone(), events_sink).await;
             Ok(())
         } else {
-            Err(anyhow!(
-                "Not connected to a room. Cannot listen for events."
-            ))
+            Err(anyhow!("Not connected to a room. Cannot listen for events."))
         }
+    }
+    
+    pub async fn replay_room(
+        &mut self,
+        server_addr: String,
+        log_filename: String,
+        events_sink: Arc<Mutex<StreamSink<EventMessage>>>,
+    ) -> Result<()> {
+        let server_socket_addr = server_addr.parse()?;
+        let conn = self
+            .endpoint
+            .connect(server_socket_addr, "localhost")?
+            .await?;
+        info!("Connected to server for replay at {}", server_addr);
+
+        let (mut send, _) = conn.open_bi().await?;
+
+        let request = ClientToServer {
+            payload: Some(ClientPayload::InitialRequest(InitialRequest {
+                request_type: Some(RequestType::ReplayRoom(ReplayRoomRequest {
+                    log_filename,
+                })),
+            })),
+        };
+        send.write_all(&request.encode_to_vec()).await?;
+        send.finish()?;
+
+        self.start_event_listener(conn, events_sink).await;
+        Ok(())
     }
 
     async fn start_event_listener(
@@ -139,19 +164,11 @@ impl ClientState {
                                 Ok(data) => {
                                     if let Ok(msg) = ServerToClient::decode(&data[..]) {
                                         if let Some(ServerPayload::RoomEvent(event)) = msg.payload {
-                                            let event_json = serde_json::to_string(&event)
-                                                .unwrap_or_else(|e| {
-                                                    format!("{{\"error\":\"{}\"}}", e)
-                                                });
-
-                                            let message = EventMessage {
-                                                data: event_json.into_bytes(),
-                                            };
+                                            let event_bytes = event.encode_to_vec();
+                                            let message = EventMessage { data: event_bytes };
                                             let locked_sink = sink.lock().await;
                                             if locked_sink.add(message).is_err() {
-                                                warn!(
-                                                    "Failed to send event to Flutter: Sink is closed."
-                                                );
+                                                warn!("Failed to send event to Flutter: Sink is closed.");
                                             }
                                         }
                                     }

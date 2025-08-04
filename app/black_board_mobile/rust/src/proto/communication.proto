@@ -17,6 +17,7 @@ message InitialRequest {
     oneof request_type {
         CreateRoomRequest create_room = 1;
         JoinRoomRequest join_room = 2;
+        ReplayRoomRequest replay_room = 3;
     }
 }
 
@@ -29,6 +30,10 @@ message JoinRoomRequest {
     string username = 2;
 }
 
+message ReplayRoomRequest {
+    string log_filename = 1;
+}
+
 message RoomMessage {
   oneof payload {
     CanvasCommand canvas_command = 1;
@@ -36,10 +41,40 @@ message RoomMessage {
   }
 }
 
-message CanvasCommand {
-  string command_json = 1;
-  int64 timestamp_ms = 2;
+// *** بخش بهینه شده CanvasCommand ***
+message Point {
+    double dx = 1;
+    double dy = 2;
 }
+
+message PathStart {
+    string id = 1;
+    Point point = 2;
+    uint32 color = 3;
+    double stroke_width = 4;
+}
+
+message PathAppend {
+    string id = 1;
+    Point point = 2;
+}
+
+message PathFull {
+    string id = 1;
+    repeated Point points = 2;
+    uint32 color = 3;
+    double stroke_width = 4;
+}
+
+message CanvasCommand {
+  int64 timestamp_ms = 1;
+  oneof command_type {
+    PathStart path_start = 2;
+    PathAppend path_append = 3;
+    PathFull path_full = 4;
+  }
+}
+// *** پایان بخش بهینه شده ***
 
 message AudioChunk {
   bytes data = 1;
@@ -84,7 +119,12 @@ message RoomEvent {
         UserLeft user_left = 2;
         BroadcastedCanvasCommand canvas_command = 3;
         BroadcastedAudioChunk audio_chunk = 4;
+        HostEndedSession host_ended_session = 5;
     }
+}
+
+message HostEndedSession {
+    string message = 1;
 }
 
 message UserJoined {

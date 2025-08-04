@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:black_board_mobile/src/rust/api.dart';
-import 'package:black_board_mobile/src/rust/bridge_models.dart';
+import 'package:black_board_mobile/src/rust/bridge_models.dart' as rust;
 import 'package:black_board_mobile/src/rust/frb_generated.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'src/generated/communication.pb.dart' as proto;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,10 +13,11 @@ Future<void> main() async {
 }
 
 const uuid = Uuid();
+// ignore: invalid_use_of_internal_member
+final api = RustLib.instance.api;
 
-// مدل داده برای نگهداری یک مسیر نقاشی
+// مدل داده برای نگهداری یک مسیر نقاشی در UI
 class DrawingPath {
-  // *** اضافه شدن شناسه منحصر به فرد برای هر مسیر ***
   final String id;
   final List<Offset> points;
   final Color color;
@@ -28,39 +29,6 @@ class DrawingPath {
     this.color = Colors.black,
     this.strokeWidth = 4.0,
   });
-
-  DrawingPath copyWith({List<Offset>? points}) {
-    return DrawingPath(
-      id: id,
-      points: points ?? this.points,
-      color: color,
-      strokeWidth: strokeWidth,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'points': points.map((p) => {'dx': p.dx, 'dy': p.dy}).toList(),
-      'color': color.value,
-      'strokeWidth': strokeWidth,
-    };
-  }
-
-  factory DrawingPath.fromJson(Map<String, dynamic> json) {
-    final pointsList = json['points'] as List? ?? [];
-    return DrawingPath(
-      id: json['id'] ?? uuid.v4(),
-      points: pointsList
-          .map(
-            (p) =>
-                Offset((p['dx'] ?? 0.0) as double, (p['dy'] ?? 0.0) as double),
-          )
-          .toList(),
-      color: Color((json['color'] ?? 0xFF000000) as int),
-      strokeWidth: (json['strokeWidth'] ?? 4.0) as double,
-    );
-  }
 }
 
 class MyApp extends StatelessWidget {
@@ -90,9 +58,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   String? _roomId;
   bool _isConnected = false;
-  StreamSubscription<EventMessage>? _eventSubscription;
+  StreamSubscription<rust.EventMessage>? _eventSubscription;
 
-  // *** استفاده از Map برای مدیریت بهینه مسیرها ***
   Map<String, DrawingPath> _paths = {};
   String? _currentPathId;
 
@@ -111,19 +78,41 @@ class _MyHomePageState extends State<MyHomePage> {
     _eventSubscription = stream.listen(
       (event) {
         try {
-          final eventJsonString = utf8.decode(event.data);
-          final eventData = json.decode(eventJsonString);
+          //解析 کردن بایت‌های خام Protobuf
+          final roomEvent = proto.RoomEvent.fromBuffer(event.data);
 
-          if (eventData['event_type']?['CanvasCommand'] != null) {
-            final commandData = eventData['event_type']['CanvasCommand'];
-            final commandJsonString = commandData['command']['command_json'];
-            final pathData = json.decode(commandJsonString);
-            final receivedPath = DrawingPath.fromJson(pathData);
-
+          if (roomEvent.hasCanvasCommand()) {
+            final command = roomEvent.canvasCommand.command;
             if (mounted) {
               setState(() {
-                // *** بروزرسانی یا اضافه کردن مسیر در Map ***
-                _paths[receivedPath.id] = receivedPath;
+                // *** مدیریت رویدادهای ساختاریافته جدید ***
+                if (command.hasPathStart()) {
+                  final pathStart = command.pathStart;
+                  _paths[pathStart.id] = DrawingPath(
+                    id: pathStart.id,
+                    points: [Offset(pathStart.point.dx, pathStart.point.dy)],
+                    color: Color(pathStart.color),
+                    strokeWidth: pathStart.strokeWidth,
+                  );
+                } else if (command.hasPathAppend()) {
+                  final pathAppend = command.pathAppend;
+                  if (_paths.containsKey(pathAppend.id)) {
+                    _paths[pathAppend.id]!.points.add(
+                          Offset(pathAppend.point.dx, pathAppend.point.dy),
+                        );
+                  }
+                } else if (command.hasPathFull()) {
+                  // این برای همگام‌سازی تاریخچه است
+                  final pathFull = command.pathFull;
+                  _paths[pathFull.id] = DrawingPath(
+                    id: pathFull.id,
+                    points: pathFull.points
+                        .map((p) => Offset(p.dx, p.dy))
+                        .toList(),
+                    color: Color(pathFull.color),
+                    strokeWidth: pathFull.strokeWidth,
+                  );
+                }
               });
             }
           }
@@ -185,7 +174,7 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         _isConnected = false;
         _roomId = null;
-        _paths = {}; // پاک کردن Map
+        _paths = {};
       });
     }
   }
@@ -197,37 +186,48 @@ class _MyHomePageState extends State<MyHomePage> {
       final newPath = DrawingPath(
         id: _currentPathId!,
         points: [details.localPosition],
+        // شما می‌توانید رنگ و ضخامت را از UI انتخاب کنید
+        color: Colors.amber,
+        strokeWidth: 5.0,
       );
       _paths[_currentPathId!] = newPath;
+      
+      // *** ارسال رویداد ساختاریافته PathStart ***
+      startPath(
+        id: newPath.id,
+        point: rust.Point(dx: newPath.points.first.dx, dy: newPath.points.first.dy),
+        color: newPath.color.value,
+        strokeWidth: newPath.strokeWidth,
+      );
     });
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
     if (_currentPathId == null || _paths[_currentPathId] == null) return;
     setState(() {
-      final updatedPath = _paths[_currentPathId]!.copyWith(
-        points: List.from(_paths[_currentPathId]!.points)
-          ..add(details.localPosition),
-      );
-      _paths[_currentPathId!] = updatedPath;
+      _paths[_currentPathId]!.points.add(details.localPosition);
     });
-    // *** ارسال داده در حین حرکت ***
-    _sendCurrentPathUpdate();
+    
+    // *** ارسال رویداد ساختاریافته PathAppend ***
+    appendToPath(
+      id: _currentPathId!,
+      point: rust.Point(dx: details.localPosition.dx, dy: details.localPosition.dy),
+    );
   }
 
   void _onPanEnd(DragEndDetails details) {
-    if (_currentPathId == null) return;
-    _sendCurrentPathUpdate(); // ارسال آخرین وضعیت
-    _currentPathId = null;
-  }
-
-  // تابع کمکی برای ارسال مسیر فعلی به سرور
-  void _sendCurrentPathUpdate() {
     if (_currentPathId == null || _paths[_currentPathId] == null) return;
-    final pathToSend = _paths[_currentPathId]!;
-    final commandJson = json.encode(pathToSend.toJson());
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    sendCanvasCommand(commandJson: commandJson, timestampMs: timestamp);
+    
+    // *** ارسال رویداد ساختاریافته PathFull برای ذخیره در تاریخچه ***
+    final finishedPath = _paths[_currentPathId]!;
+    finishPath(
+      id: finishedPath.id,
+      points: finishedPath.points.map((p) => rust.Point(dx: p.dx, dy: p.dy)).toList(),
+      color: finishedPath.color.value,
+      strokeWidth: finishedPath.strokeWidth,
+    );
+
+    _currentPathId = null;
   }
 
   void _showErrorDialog(String message) {
@@ -266,9 +266,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   children: [
                     TextField(
                       controller: _serverAddrController,
-                      decoration: const InputDecoration(
-                        labelText: 'Server Address',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Server Address'),
                       enabled: !_isConnected,
                     ),
                     TextField(
@@ -282,9 +280,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         Expanded(
                           child: TextField(
                             controller: _roomIdController,
-                            decoration: const InputDecoration(
-                              labelText: 'Room ID',
-                            ),
+                            decoration: const InputDecoration(labelText: 'Room ID'),
                             enabled: !_isConnected,
                           ),
                         ),
@@ -376,8 +372,7 @@ class DrawingPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant DrawingPainter oldDelegate) {
-    // این شرط با الگوی Immutable به درستی کار می‌کند
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
     return true;
   }
 }
