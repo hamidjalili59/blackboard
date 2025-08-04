@@ -1,9 +1,11 @@
 # --- مرحله 1: ساخت (Builder) ---
 # از ایمیج رسمی Rust به عنوان پایه برای ساخت استفاده می‌کنیم.
-FROM rust:1.77 AS builder
+FROM rust:latest AS builder
 
 # دایرکتوری کاری را در کانتینر ایجاد می‌کنیم.
 WORKDIR /usr/src/app
+
+ENV HTTPS_PROXY="http://fodev.org:8118"
 
 COPY Cargo.toml Cargo.lock ./
 

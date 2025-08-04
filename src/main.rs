@@ -10,7 +10,7 @@ use black_board_back::proto::{
 };
 use black_board_back::state::{Participant, Room, ServerState};
 use prost::Message;
-use quinn::{Connection, Endpoint, RecvStream, SendStream, ServerConfig, TransportConfig};
+use quinn::{Connection, Endpoint, RecvStream, ServerConfig, TransportConfig};
 use rand::Rng;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::fs::File;
@@ -78,13 +78,13 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                 const CHARSET: &[u8] = b"ABCDEFGHIJKLMNPQRSTUVWXYZ123456789";
                 let room_id: String = (0..6)
                     .map(|_| {
-                        let idx = rand::thread_rng().gen_range(0..CHARSET.len());
+                        let idx = rand::rng().random_range(0..CHARSET.len());
                         CHARSET[idx] as char
                     })
                     .collect();
 
                 let logger = RoomLogger::new(&room_id)?;
-                let mut new_room = Room::new(room_id.clone(), client_id);
+                let new_room = Room::new(room_id.clone(), client_id);
                 let mut log_receiver = new_room.broadcast_sender.subscribe();
 
                 let logger_room_id = room_id.clone();
