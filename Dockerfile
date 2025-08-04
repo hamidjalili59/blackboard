@@ -5,8 +5,6 @@ FROM rust:latest AS builder
 # دایرکتوری کاری را در کانتینر ایجاد می‌کنیم.
 WORKDIR /usr/src/app
 
-ENV HTTPS_PROXY="http://fodev.org:8118"
-
 COPY Cargo.toml Cargo.lock ./
 
 # یک پروژه ساختگی ایجاد می‌کنیم تا وابستگی‌ها دانلود و کش شوند.
