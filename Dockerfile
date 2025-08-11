@@ -5,7 +5,7 @@ FROM rust:latest AS builder
 # دایرکتوری کاری را در کانتینر ایجاد می‌کنیم.
 WORKDIR /usr/src/app
 
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml Cargo.lock ./ ./src/
 
 # یک پروژه ساختگی ایجاد می‌کنیم تا وابستگی‌ها دانلود و کش شوند.
 # این کار سرعت بیلد را در تغییرات بعدی کد افزایش می‌دهد.

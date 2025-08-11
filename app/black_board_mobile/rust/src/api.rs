@@ -4,8 +4,8 @@ use crate::proto::{
     canvas_command, room_message, AudioChunk, CanvasCommand, PathAppend, PathFull, PathStart,
 };
 use anyhow::Result;
-use flutter_rust_bridge::frb;
 use crate::frb_generated::StreamSink;
+use flutter_rust_bridge::frb;
 use lazy_static::lazy_static;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -59,6 +59,13 @@ pub fn replay_room(
         replay_client
             .replay_room(server_addr, log_filename, Arc::new(Mutex::new(events_sink)))
             .await
+    })
+}
+
+pub fn list_recordings(server_addr: String) -> Result<Vec<String>> {
+    TOKIO_RUNTIME.block_on(async {
+        let mut client = ClientState::new()?;
+        client.list_recordings(server_addr).await
     })
 }
 

@@ -4,6 +4,7 @@ use crate::proto::{
     client_to_server::Payload as ClientPayload,
     initial_request::RequestType,
     initial_response::ResponseType,
+    ListRecordingsRequest,
     room_message::Payload as RoomMessagePayload,
     server_to_client::Payload as ServerPayload,
     ClientToServer, CreateRoomRequest, InitialRequest, JoinRoomRequest, ReplayRoomRequest,
@@ -118,7 +119,7 @@ impl ClientState {
             Err(anyhow!("Not connected to a room. Cannot listen for events."))
         }
     }
-    
+
     pub async fn replay_room(
         &mut self,
         server_addr: String,
@@ -146,6 +147,42 @@ impl ClientState {
 
         self.start_event_listener(conn, events_sink).await;
         Ok(())
+    }
+
+    pub async fn list_recordings(&mut self, server_addr: String) -> Result<Vec<String>> {
+        let server_socket_addr = server_addr.parse()?;
+        let conn = self
+            .endpoint
+            .connect(server_socket_addr, "localhost")?
+            .await?;
+        info!("Connected to server to list recordings at {}", server_addr);
+
+        let (mut send, mut recv) = conn.open_bi().await?;
+
+        let request = ClientToServer {
+            payload: Some(ClientPayload::InitialRequest(InitialRequest {
+                request_type: Some(RequestType::ListRecordings(ListRecordingsRequest {})),
+            })),
+        };
+        send.write_all(&request.encode_to_vec()).await?;
+        send.finish()?;
+
+        let response_bytes = recv.read_to_end(1024 * 10).await?;
+        conn.close(0u32.into(), b"done");
+
+        let response = ServerToClient::decode(&response_bytes[..])?;
+
+        if let Some(ServerPayload::InitialResponse(initial_response)) = response.payload {
+            if let Some(ResponseType::ListRecordingsResponse(list_response)) =
+                initial_response.response_type
+            {
+                Ok(list_response.filenames)
+            } else {
+                bail!("Server sent an unexpected response type for list recordings request.")
+            }
+        } else {
+            bail!("Server sent an invalid response for list recordings.")
+        }
     }
 
     async fn start_event_listener(

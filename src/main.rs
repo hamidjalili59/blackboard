@@ -1,26 +1,31 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{anyhow, bail, Result};
 use black_board_back::logger::RoomLogger;
 use black_board_back::proto::{
-    self, BroadcastedAudioChunk, BroadcastedCanvasCommand, ClientToServer, CreateRoomResponse,
-    ErrorResponse, HostEndedSession, InitialResponse, JoinRoomResponse, RoomEvent, RoomMessage,
-    ServerToClient, UserJoined, UserLeft, canvas_command,
-    client_to_server::Payload as ClientPayload, initial_request::RequestType,
-    initial_response::ResponseType, room_event::EventType,
+    self, client_to_server::Payload as ClientPayload,
+    canvas_command,
+    initial_request::RequestType,
+    initial_response::ResponseType,
+    ListRecordingsResponse,
+    room_event::EventType,
     room_message::Payload as RoomMessagePayload, server_to_client::Payload as ServerPayload,
+    BroadcastedAudioChunk, BroadcastedCanvasCommand, ClientToServer, CreateRoomResponse,
+    ErrorResponse, HostEndedSession, InitialResponse, JoinRoomResponse, RoomEvent, RoomMessage,
+    ServerToClient, UserJoined, UserLeft,
 };
 use black_board_back::state::{Participant, Room, ServerState};
 use prost::Message;
 use quinn::{Connection, Endpoint, RecvStream, ServerConfig, TransportConfig};
 use rand::Rng;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::fs::File as TokioFile;
 use tokio::io::{AsyncReadExt, BufReader};
-use tokio::sync::{Mutex, broadcast};
-use tracing::{Level, error, info, warn};
+use tokio::sync::{broadcast, Mutex};
+use tracing::{error, info, warn, Level};
 use uuid::Uuid;
 
 type SharedServerState = Arc<Mutex<ServerState>>;
@@ -85,7 +90,7 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
 
                 let logger = RoomLogger::new(&room_id)?;
                 let new_room = Room::new(room_id.clone(), client_id);
-                let mut log_receiver = new_room.broadcast_sender.subscribe();
+                let mut log_receiver: broadcast::Receiver<RoomEvent> = new_room.broadcast_sender.subscribe();
 
                 let logger_room_id = room_id.clone();
                 tokio::spawn(async move {
@@ -114,14 +119,7 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                 send_stream.write_all(&response.encode_to_vec()).await?;
                 send_stream.finish()?;
 
-                return handle_participant_session(
-                    connection,
-                    state,
-                    room_id,
-                    client_id,
-                    req.username,
-                )
-                .await;
+                return handle_participant_session(connection, state, room_id, client_id, req.username).await;
             }
             Some(RequestType::JoinRoom(req)) => {
                 let client_id = Uuid::new_v4();
@@ -134,14 +132,9 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                             warn!("Room '{}' not found.", req.room_id);
                             let response = ServerToClient {
                                 payload: Some(ServerPayload::InitialResponse(InitialResponse {
-                                    response_type: Some(ResponseType::ErrorResponse(
-                                        ErrorResponse {
-                                            message: format!(
-                                                "Room with ID '{}' not found.",
-                                                req.room_id
-                                            ),
-                                        },
-                                    )),
+                                    response_type: Some(ResponseType::ErrorResponse(ErrorResponse {
+                                        message: format!("Room with ID '{}' not found.", req.room_id),
+                                    })),
                                 })),
                             };
                             send_stream.write_all(&response.encode_to_vec()).await?;
@@ -161,11 +154,7 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                 send_stream.write_all(&response.encode_to_vec()).await?;
                 send_stream.finish()?;
 
-                info!(
-                    "Sending {} historical full paths to new user {}",
-                    history_to_send.len(),
-                    client_id
-                );
+                info!("Sending {} historical canvas paths to new user {}", history_to_send.len(), client_id);
                 for cmd in history_to_send {
                     let event = RoomEvent {
                         event_type: Some(EventType::CanvasCommand(BroadcastedCanvasCommand {
@@ -173,27 +162,56 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                             command: Some(cmd),
                         })),
                     };
-                    let message = ServerToClient {
-                        payload: Some(ServerPayload::RoomEvent(event)),
-                    };
+                    let message = ServerToClient { payload: Some(ServerPayload::RoomEvent(event)) };
                     let mut uni_stream = connection.open_uni().await?;
                     uni_stream.write_all(&message.encode_to_vec()).await?;
                     uni_stream.finish()?;
                 }
 
-                return handle_participant_session(
-                    connection,
-                    state,
-                    req.room_id,
-                    client_id,
-                    req.username,
-                )
-                .await;
+                return handle_participant_session(connection, state, req.room_id, client_id, req.username).await;
             }
             Some(RequestType::ReplayRoom(req)) => {
                 info!("Received ReplayRoomRequest for log: {}", req.log_filename);
                 send_stream.finish()?;
                 return handle_replay_request(connection, req.log_filename).await;
+            }
+            Some(RequestType::ListRecordings(_)) => {
+                info!("Received ListRecordingsRequest from {}", remote_addr);
+                let mut filenames = Vec::new();
+                let records_dir = "records";
+                
+                if let Ok(entries) = fs::read_dir(records_dir) {
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            if let Some(filename) = entry.file_name().to_str() {
+                                if filename.ends_with(".binlog") {
+                                    filenames.push(filename.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let response = ServerToClient {
+                    payload: Some(ServerPayload::InitialResponse(InitialResponse {
+                        response_type: Some(ResponseType::ListRecordingsResponse(
+                            ListRecordingsResponse { filenames },
+                        )),
+                    })),
+                };
+
+                send_stream.write_all(&response.encode_to_vec()).await?;
+                
+                // *** رفع خطا: به جای بستن کل اتصال، فقط استریم را به درستی به پایان می‌رسانیم ***
+                // این کار به کلاینت اجازه می‌دهد تا تمام داده‌ها را دریافت کند.
+                send_stream.finish()?;
+                
+                // منتظر می‌مانیم تا کلاینت نیز سمت خود را ببندد و سپس خارج می‌شویم.
+                // خواندن تا انتها، منتظر می‌ماند تا کلاینت استریم ارسال خود را ببندد.
+                let _ = recv_stream.read_to_end(0).await;
+                
+                info!("Finished sending recording list to {}", remote_addr);
+                return Ok(());
             }
             None => return Err(anyhow!("Invalid initial request type")),
         }
@@ -204,7 +222,7 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
 
 async fn handle_replay_request(connection: Connection, log_filename: String) -> Result<()> {
     let file_path = std::path::Path::new("records").join(&log_filename);
-
+    
     if !file_path.exists() {
         bail!("Log file not found: {}", log_filename);
     }
@@ -232,9 +250,7 @@ async fn handle_replay_request(connection: Connection, log_filename: String) -> 
         };
 
         let mut send_stream = connection.open_uni().await?;
-        send_stream
-            .write_all(&message_to_send.encode_to_vec())
-            .await?;
+        send_stream.write_all(&message_to_send.encode_to_vec()).await?;
         send_stream.finish()?;
     }
 
@@ -282,12 +298,12 @@ async fn handle_participant_session(
                         Some(EventType::CanvasCommand(cmd))
                             if cmd.from_client_id == client_id.to_string() =>
                         {
-                            continue;
+                            continue
                         }
                         Some(EventType::AudioChunk(chunk))
                             if chunk.from_client_id == client_id.to_string() =>
                         {
-                            continue;
+                            continue
                         }
                         _ => {}
                     }
@@ -329,15 +345,7 @@ async fn handle_participant_session(
                 let state_clone = state.clone();
                 let room_id_clone = room_id.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = process_client_stream(
-                        &mut recv,
-                        &sender,
-                        client_id,
-                        state_clone,
-                        &room_id_clone,
-                    )
-                    .await
-                    {
+                    if let Err(e) = process_client_stream(&mut recv, &sender, client_id, state_clone, &room_id_clone).await {
                         warn!("Failed to process stream from client {}: {}", client_id, e);
                     }
                 });
@@ -356,10 +364,7 @@ async fn handle_participant_session(
         let mut state_guard = state.lock().await;
         if let Some(room) = state_guard.rooms.get_mut(&room_id) {
             if client_id == room.host_id {
-                info!(
-                    "Host {} has left room {}. Ending session for all.",
-                    client_id, room_id
-                );
+                info!("Host {} has left room {}. Ending session for all.", client_id, room_id);
                 let end_event = RoomEvent {
                     event_type: Some(EventType::HostEndedSession(HostEndedSession {
                         message: "The host has ended the session.".to_string(),
@@ -394,15 +399,13 @@ async fn process_client_stream(
     let data = recv_stream.read_to_end(65536).await?;
     let message = ClientToServer::decode(&data[..])?;
 
-    if let Some(ClientPayload::RoomMessage(RoomMessage {
-        payload: Some(payload),
-    })) = message.payload
-    {
+    if let Some(ClientPayload::RoomMessage(RoomMessage { payload: Some(payload) })) = message.payload {
+        
         if let RoomMessagePayload::CanvasCommand(ref cmd) = payload {
             if let Some(canvas_command::CommandType::PathFull(_)) = &cmd.command_type {
                 let mut state_guard = state.lock().await;
                 if let Some(room) = state_guard.rooms.get_mut(room_id) {
-                    info!("Storing a full path in history for room {}", room_id);
+                    info!("Storing a full path in canvas history for room {}", room_id);
                     room.canvas_history.push(cmd.clone());
                 }
             }
@@ -410,16 +413,20 @@ async fn process_client_stream(
 
         let event = match payload {
             RoomMessagePayload::CanvasCommand(cmd) => RoomEvent {
-                event_type: Some(EventType::CanvasCommand(BroadcastedCanvasCommand {
-                    from_client_id: client_id.to_string(),
-                    command: Some(cmd),
-                })),
+                event_type: Some(EventType::CanvasCommand(
+                    BroadcastedCanvasCommand {
+                        from_client_id: client_id.to_string(),
+                        command: Some(cmd),
+                    },
+                )),
             },
             RoomMessagePayload::AudioChunk(chunk) => RoomEvent {
-                event_type: Some(EventType::AudioChunk(BroadcastedAudioChunk {
-                    from_client_id: client_id.to_string(),
-                    chunk: Some(chunk),
-                })),
+                event_type: Some(EventType::AudioChunk(
+                    BroadcastedAudioChunk {
+                        from_client_id: client_id.to_string(),
+                        chunk: Some(chunk),
+                    },
+                )),
             },
         };
         broadcast_sender.send(event)?;
@@ -432,10 +439,10 @@ fn configure_server() -> Result<(ServerConfig, Vec<u8>)> {
     let cert_der_bytes = cert.cert.der().to_vec();
     let priv_key_der_bytes = cert.signing_key.serialize_der();
     let cert_chain = vec![CertificateDer::from(cert_der_bytes.clone())];
-    let priv_key = PrivateKeyDer::from(rustls_pki_types::PrivatePkcs8KeyDer::from(
-        priv_key_der_bytes,
-    ));
-
+    let priv_key = PrivateKeyDer::from(
+        rustls_pki_types::PrivatePkcs8KeyDer::from(priv_key_der_bytes),
+    );
+    
     let mut transport = TransportConfig::default();
     transport.max_idle_timeout(Some(std::time::Duration::from_secs(3600 * 24).try_into()?));
 

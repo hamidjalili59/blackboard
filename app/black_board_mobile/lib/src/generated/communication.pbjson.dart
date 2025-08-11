@@ -1,13 +1,14 @@
+// This is a generated file - do not edit.
 //
-//  Generated code. Do not modify.
-//  source: communication.proto
-//
+// Generated from communication.proto.
+
 // @dart = 3.3
 
 // ignore_for_file: annotate_overrides, camel_case_types, comment_references
-// ignore_for_file: constant_identifier_names, library_prefixes
-// ignore_for_file: non_constant_identifier_names, prefer_final_fields
-// ignore_for_file: unnecessary_import, unnecessary_this, unused_import
+// ignore_for_file: constant_identifier_names
+// ignore_for_file: curly_braces_in_flow_control_structures
+// ignore_for_file: deprecated_member_use_from_same_package, library_prefixes
+// ignore_for_file: non_constant_identifier_names, unused_import
 
 import 'dart:convert' as $convert;
 import 'dart:core' as $core;
@@ -17,8 +18,24 @@ import 'dart:typed_data' as $typed_data;
 const ClientToServer$json = {
   '1': 'ClientToServer',
   '2': [
-    {'1': 'initial_request', '3': 1, '4': 1, '5': 11, '6': '.communication.InitialRequest', '9': 0, '10': 'initialRequest'},
-    {'1': 'room_message', '3': 2, '4': 1, '5': 11, '6': '.communication.RoomMessage', '9': 0, '10': 'roomMessage'},
+    {
+      '1': 'initial_request',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.InitialRequest',
+      '9': 0,
+      '10': 'initialRequest'
+    },
+    {
+      '1': 'room_message',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.RoomMessage',
+      '9': 0,
+      '10': 'roomMessage'
+    },
   ],
   '8': [
     {'1': 'payload'},
@@ -36,9 +53,42 @@ final $typed_data.Uint8List clientToServerDescriptor = $convert.base64Decode(
 const InitialRequest$json = {
   '1': 'InitialRequest',
   '2': [
-    {'1': 'create_room', '3': 1, '4': 1, '5': 11, '6': '.communication.CreateRoomRequest', '9': 0, '10': 'createRoom'},
-    {'1': 'join_room', '3': 2, '4': 1, '5': 11, '6': '.communication.JoinRoomRequest', '9': 0, '10': 'joinRoom'},
-    {'1': 'replay_room', '3': 3, '4': 1, '5': 11, '6': '.communication.ReplayRoomRequest', '9': 0, '10': 'replayRoom'},
+    {
+      '1': 'create_room',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.CreateRoomRequest',
+      '9': 0,
+      '10': 'createRoom'
+    },
+    {
+      '1': 'join_room',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.JoinRoomRequest',
+      '9': 0,
+      '10': 'joinRoom'
+    },
+    {
+      '1': 'replay_room',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.ReplayRoomRequest',
+      '9': 0,
+      '10': 'replayRoom'
+    },
+    {
+      '1': 'list_recordings',
+      '3': 4,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.ListRecordingsRequest',
+      '9': 0,
+      '10': 'listRecordings'
+    },
   ],
   '8': [
     {'1': 'request_type'},
@@ -50,8 +100,18 @@ final $typed_data.Uint8List initialRequestDescriptor = $convert.base64Decode(
     'Cg5Jbml0aWFsUmVxdWVzdBJDCgtjcmVhdGVfcm9vbRgBIAEoCzIgLmNvbW11bmljYXRpb24uQ3'
     'JlYXRlUm9vbVJlcXVlc3RIAFIKY3JlYXRlUm9vbRI9Cglqb2luX3Jvb20YAiABKAsyHi5jb21t'
     'dW5pY2F0aW9uLkpvaW5Sb29tUmVxdWVzdEgAUghqb2luUm9vbRJDCgtyZXBsYXlfcm9vbRgDIA'
-    'EoCzIgLmNvbW11bmljYXRpb24uUmVwbGF5Um9vbVJlcXVlc3RIAFIKcmVwbGF5Um9vbUIOCgxy'
-    'ZXF1ZXN0X3R5cGU=');
+    'EoCzIgLmNvbW11bmljYXRpb24uUmVwbGF5Um9vbVJlcXVlc3RIAFIKcmVwbGF5Um9vbRJPCg9s'
+    'aXN0X3JlY29yZGluZ3MYBCABKAsyJC5jb21tdW5pY2F0aW9uLkxpc3RSZWNvcmRpbmdzUmVxdW'
+    'VzdEgAUg5saXN0UmVjb3JkaW5nc0IOCgxyZXF1ZXN0X3R5cGU=');
+
+@$core.Deprecated('Use listRecordingsRequestDescriptor instead')
+const ListRecordingsRequest$json = {
+  '1': 'ListRecordingsRequest',
+};
+
+/// Descriptor for `ListRecordingsRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listRecordingsRequestDescriptor =
+    $convert.base64Decode('ChVMaXN0UmVjb3JkaW5nc1JlcXVlc3Q=');
 
 @$core.Deprecated('Use createRoomRequestDescriptor instead')
 const CreateRoomRequest$json = {
@@ -95,8 +155,24 @@ final $typed_data.Uint8List replayRoomRequestDescriptor = $convert.base64Decode(
 const RoomMessage$json = {
   '1': 'RoomMessage',
   '2': [
-    {'1': 'canvas_command', '3': 1, '4': 1, '5': 11, '6': '.communication.CanvasCommand', '9': 0, '10': 'canvasCommand'},
-    {'1': 'audio_chunk', '3': 2, '4': 1, '5': 11, '6': '.communication.AudioChunk', '9': 0, '10': 'audioChunk'},
+    {
+      '1': 'canvas_command',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.CanvasCommand',
+      '9': 0,
+      '10': 'canvasCommand'
+    },
+    {
+      '1': 'audio_chunk',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.AudioChunk',
+      '9': 0,
+      '10': 'audioChunk'
+    },
   ],
   '8': [
     {'1': 'payload'},
@@ -119,15 +195,22 @@ const Point$json = {
 };
 
 /// Descriptor for `Point`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List pointDescriptor = $convert.base64Decode(
-    'CgVQb2ludBIOCgJkeBgBIAEoAVICZHgSDgoCZHkYAiABKAFSAmR5');
+final $typed_data.Uint8List pointDescriptor = $convert
+    .base64Decode('CgVQb2ludBIOCgJkeBgBIAEoAVICZHgSDgoCZHkYAiABKAFSAmR5');
 
 @$core.Deprecated('Use pathStartDescriptor instead')
 const PathStart$json = {
   '1': 'PathStart',
   '2': [
     {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
-    {'1': 'point', '3': 2, '4': 1, '5': 11, '6': '.communication.Point', '10': 'point'},
+    {
+      '1': 'point',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.Point',
+      '10': 'point'
+    },
     {'1': 'color', '3': 3, '4': 1, '5': 13, '10': 'color'},
     {'1': 'stroke_width', '3': 4, '4': 1, '5': 1, '10': 'strokeWidth'},
   ],
@@ -144,7 +227,14 @@ const PathAppend$json = {
   '1': 'PathAppend',
   '2': [
     {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
-    {'1': 'point', '3': 2, '4': 1, '5': 11, '6': '.communication.Point', '10': 'point'},
+    {
+      '1': 'point',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.Point',
+      '10': 'point'
+    },
   ],
 };
 
@@ -158,7 +248,14 @@ const PathFull$json = {
   '1': 'PathFull',
   '2': [
     {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
-    {'1': 'points', '3': 2, '4': 3, '5': 11, '6': '.communication.Point', '10': 'points'},
+    {
+      '1': 'points',
+      '3': 2,
+      '4': 3,
+      '5': 11,
+      '6': '.communication.Point',
+      '10': 'points'
+    },
     {'1': 'color', '3': 3, '4': 1, '5': 13, '10': 'color'},
     {'1': 'stroke_width', '3': 4, '4': 1, '5': 1, '10': 'strokeWidth'},
   ],
@@ -175,9 +272,33 @@ const CanvasCommand$json = {
   '1': 'CanvasCommand',
   '2': [
     {'1': 'timestamp_ms', '3': 1, '4': 1, '5': 3, '10': 'timestampMs'},
-    {'1': 'path_start', '3': 2, '4': 1, '5': 11, '6': '.communication.PathStart', '9': 0, '10': 'pathStart'},
-    {'1': 'path_append', '3': 3, '4': 1, '5': 11, '6': '.communication.PathAppend', '9': 0, '10': 'pathAppend'},
-    {'1': 'path_full', '3': 4, '4': 1, '5': 11, '6': '.communication.PathFull', '9': 0, '10': 'pathFull'},
+    {
+      '1': 'path_start',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.PathStart',
+      '9': 0,
+      '10': 'pathStart'
+    },
+    {
+      '1': 'path_append',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.PathAppend',
+      '9': 0,
+      '10': 'pathAppend'
+    },
+    {
+      '1': 'path_full',
+      '3': 4,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.PathFull',
+      '9': 0,
+      '10': 'pathFull'
+    },
   ],
   '8': [
     {'1': 'command_type'},
@@ -210,8 +331,24 @@ final $typed_data.Uint8List audioChunkDescriptor = $convert.base64Decode(
 const ServerToClient$json = {
   '1': 'ServerToClient',
   '2': [
-    {'1': 'initial_response', '3': 1, '4': 1, '5': 11, '6': '.communication.InitialResponse', '9': 0, '10': 'initialResponse'},
-    {'1': 'room_event', '3': 2, '4': 1, '5': 11, '6': '.communication.RoomEvent', '9': 0, '10': 'roomEvent'},
+    {
+      '1': 'initial_response',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.InitialResponse',
+      '9': 0,
+      '10': 'initialResponse'
+    },
+    {
+      '1': 'room_event',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.RoomEvent',
+      '9': 0,
+      '10': 'roomEvent'
+    },
   ],
   '8': [
     {'1': 'payload'},
@@ -228,9 +365,42 @@ final $typed_data.Uint8List serverToClientDescriptor = $convert.base64Decode(
 const InitialResponse$json = {
   '1': 'InitialResponse',
   '2': [
-    {'1': 'create_room_response', '3': 1, '4': 1, '5': 11, '6': '.communication.CreateRoomResponse', '9': 0, '10': 'createRoomResponse'},
-    {'1': 'join_room_response', '3': 2, '4': 1, '5': 11, '6': '.communication.JoinRoomResponse', '9': 0, '10': 'joinRoomResponse'},
-    {'1': 'error_response', '3': 3, '4': 1, '5': 11, '6': '.communication.ErrorResponse', '9': 0, '10': 'errorResponse'},
+    {
+      '1': 'create_room_response',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.CreateRoomResponse',
+      '9': 0,
+      '10': 'createRoomResponse'
+    },
+    {
+      '1': 'join_room_response',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.JoinRoomResponse',
+      '9': 0,
+      '10': 'joinRoomResponse'
+    },
+    {
+      '1': 'error_response',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.ErrorResponse',
+      '9': 0,
+      '10': 'errorResponse'
+    },
+    {
+      '1': 'list_recordings_response',
+      '3': 4,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.ListRecordingsResponse',
+      '9': 0,
+      '10': 'listRecordingsResponse'
+    },
   ],
   '8': [
     {'1': 'response_type'},
@@ -243,7 +413,22 @@ final $typed_data.Uint8List initialResponseDescriptor = $convert.base64Decode(
     '5pY2F0aW9uLkNyZWF0ZVJvb21SZXNwb25zZUgAUhJjcmVhdGVSb29tUmVzcG9uc2USTwoSam9p'
     'bl9yb29tX3Jlc3BvbnNlGAIgASgLMh8uY29tbXVuaWNhdGlvbi5Kb2luUm9vbVJlc3BvbnNlSA'
     'BSEGpvaW5Sb29tUmVzcG9uc2USRQoOZXJyb3JfcmVzcG9uc2UYAyABKAsyHC5jb21tdW5pY2F0'
-    'aW9uLkVycm9yUmVzcG9uc2VIAFINZXJyb3JSZXNwb25zZUIPCg1yZXNwb25zZV90eXBl');
+    'aW9uLkVycm9yUmVzcG9uc2VIAFINZXJyb3JSZXNwb25zZRJhChhsaXN0X3JlY29yZGluZ3Nfcm'
+    'VzcG9uc2UYBCABKAsyJS5jb21tdW5pY2F0aW9uLkxpc3RSZWNvcmRpbmdzUmVzcG9uc2VIAFIW'
+    'bGlzdFJlY29yZGluZ3NSZXNwb25zZUIPCg1yZXNwb25zZV90eXBl');
+
+@$core.Deprecated('Use listRecordingsResponseDescriptor instead')
+const ListRecordingsResponse$json = {
+  '1': 'ListRecordingsResponse',
+  '2': [
+    {'1': 'filenames', '3': 1, '4': 3, '5': 9, '10': 'filenames'},
+  ],
+};
+
+/// Descriptor for `ListRecordingsResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listRecordingsResponseDescriptor =
+    $convert.base64Decode(
+        'ChZMaXN0UmVjb3JkaW5nc1Jlc3BvbnNlEhwKCWZpbGVuYW1lcxgBIAMoCVIJZmlsZW5hbWVz');
 
 @$core.Deprecated('Use createRoomResponseDescriptor instead')
 const CreateRoomResponse$json = {
@@ -254,8 +439,9 @@ const CreateRoomResponse$json = {
 };
 
 /// Descriptor for `CreateRoomResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List createRoomResponseDescriptor = $convert.base64Decode(
-    'ChJDcmVhdGVSb29tUmVzcG9uc2USFwoHcm9vbV9pZBgBIAEoCVIGcm9vbUlk');
+final $typed_data.Uint8List createRoomResponseDescriptor =
+    $convert.base64Decode(
+        'ChJDcmVhdGVSb29tUmVzcG9uc2USFwoHcm9vbV9pZBgBIAEoCVIGcm9vbUlk');
 
 @$core.Deprecated('Use joinRoomResponseDescriptor instead')
 const JoinRoomResponse$json = {
@@ -278,18 +464,58 @@ const ErrorResponse$json = {
 };
 
 /// Descriptor for `ErrorResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List errorResponseDescriptor = $convert.base64Decode(
-    'Cg1FcnJvclJlc3BvbnNlEhgKB21lc3NhZ2UYASABKAlSB21lc3NhZ2U=');
+final $typed_data.Uint8List errorResponseDescriptor = $convert
+    .base64Decode('Cg1FcnJvclJlc3BvbnNlEhgKB21lc3NhZ2UYASABKAlSB21lc3NhZ2U=');
 
 @$core.Deprecated('Use roomEventDescriptor instead')
 const RoomEvent$json = {
   '1': 'RoomEvent',
   '2': [
-    {'1': 'user_joined', '3': 1, '4': 1, '5': 11, '6': '.communication.UserJoined', '9': 0, '10': 'userJoined'},
-    {'1': 'user_left', '3': 2, '4': 1, '5': 11, '6': '.communication.UserLeft', '9': 0, '10': 'userLeft'},
-    {'1': 'canvas_command', '3': 3, '4': 1, '5': 11, '6': '.communication.BroadcastedCanvasCommand', '9': 0, '10': 'canvasCommand'},
-    {'1': 'audio_chunk', '3': 4, '4': 1, '5': 11, '6': '.communication.BroadcastedAudioChunk', '9': 0, '10': 'audioChunk'},
-    {'1': 'host_ended_session', '3': 5, '4': 1, '5': 11, '6': '.communication.HostEndedSession', '9': 0, '10': 'hostEndedSession'},
+    {
+      '1': 'user_joined',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.UserJoined',
+      '9': 0,
+      '10': 'userJoined'
+    },
+    {
+      '1': 'user_left',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.UserLeft',
+      '9': 0,
+      '10': 'userLeft'
+    },
+    {
+      '1': 'canvas_command',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.BroadcastedCanvasCommand',
+      '9': 0,
+      '10': 'canvasCommand'
+    },
+    {
+      '1': 'audio_chunk',
+      '3': 4,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.BroadcastedAudioChunk',
+      '9': 0,
+      '10': 'audioChunk'
+    },
+    {
+      '1': 'host_ended_session',
+      '3': 5,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.HostEndedSession',
+      '9': 0,
+      '10': 'hostEndedSession'
+    },
   ],
   '8': [
     {'1': 'event_type'},
@@ -351,7 +577,14 @@ const BroadcastedCanvasCommand$json = {
   '1': 'BroadcastedCanvasCommand',
   '2': [
     {'1': 'from_client_id', '3': 1, '4': 1, '5': 9, '10': 'fromClientId'},
-    {'1': 'command', '3': 2, '4': 1, '5': 11, '6': '.communication.CanvasCommand', '10': 'command'},
+    {
+      '1': 'command',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.CanvasCommand',
+      '10': 'command'
+    },
   ],
 };
 
@@ -366,7 +599,14 @@ const BroadcastedAudioChunk$json = {
   '1': 'BroadcastedAudioChunk',
   '2': [
     {'1': 'from_client_id', '3': 1, '4': 1, '5': 9, '10': 'fromClientId'},
-    {'1': 'chunk', '3': 2, '4': 1, '5': 11, '6': '.communication.AudioChunk', '10': 'chunk'},
+    {
+      '1': 'chunk',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.AudioChunk',
+      '10': 'chunk'
+    },
   ],
 };
 
@@ -374,4 +614,3 @@ const BroadcastedAudioChunk$json = {
 final $typed_data.Uint8List broadcastedAudioChunkDescriptor = $convert.base64Decode(
     'ChVCcm9hZGNhc3RlZEF1ZGlvQ2h1bmsSJAoOZnJvbV9jbGllbnRfaWQYASABKAlSDGZyb21DbG'
     'llbnRJZBIvCgVjaHVuaxgCIAEoCzIZLmNvbW11bmljYXRpb24uQXVkaW9DaHVua1IFY2h1bms=');
-

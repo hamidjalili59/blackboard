@@ -18,8 +18,11 @@ message InitialRequest {
         CreateRoomRequest create_room = 1;
         JoinRoomRequest join_room = 2;
         ReplayRoomRequest replay_room = 3;
+        ListRecordingsRequest list_recordings = 4;
     }
 }
+
+message ListRecordingsRequest {}
 
 message CreateRoomRequest {
     string username = 1;
@@ -41,7 +44,6 @@ message RoomMessage {
   }
 }
 
-// *** بخش بهینه شده CanvasCommand ***
 message Point {
     double dx = 1;
     double dy = 2;
@@ -74,7 +76,6 @@ message CanvasCommand {
     PathFull path_full = 4;
   }
 }
-// *** پایان بخش بهینه شده ***
 
 message AudioChunk {
   bytes data = 1;
@@ -98,7 +99,12 @@ message InitialResponse {
         CreateRoomResponse create_room_response = 1;
         JoinRoomResponse join_room_response = 2;
         ErrorResponse error_response = 3;
+        ListRecordingsResponse list_recordings_response = 4;
     }
+}
+
+message ListRecordingsResponse {
+    repeated string filenames = 1;
 }
 
 message CreateRoomResponse {
