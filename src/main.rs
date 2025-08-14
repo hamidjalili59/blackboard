@@ -1,10 +1,11 @@
 use anyhow::{Result, anyhow, bail};
+use axum::{Json, Router, extract::State, routing::get};
 use black_board_back::logger::RoomLogger;
 use black_board_back::proto::{
     self, BroadcastedAudioChunk, BroadcastedCanvasCommand, CanvasSnapshot, ClientToServer,
     CreateRoomResponse, ErrorResponse, HostEndedSession, InitialResponse, JoinRoomResponse,
-    ListRecordingsResponse, RoomEvent, RoomMessage, ServerToClient, UserJoined, UserLeft,
-    canvas_command, client_to_server::Payload as ClientPayload, initial_request::RequestType,
+    RoomEvent, RoomMessage, ServerToClient, UserJoined, UserLeft, canvas_command,
+    client_to_server::Payload as ClientPayload, initial_request::RequestType,
     initial_response::ResponseType, room_event::EventType,
     room_message::Payload as RoomMessagePayload, server_to_client::Payload as ServerPayload,
 };
@@ -13,38 +14,77 @@ use prost::Message;
 use quinn::{Connection, Endpoint, RecvStream, ServerConfig, TransportConfig};
 use rand::Rng;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
+use serde::Serialize;
 use std::fs;
-use std::fs::File;
-use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::fs::File as TokioFile;
 use tokio::io::{AsyncReadExt, BufReader};
 use tokio::sync::{Mutex, broadcast};
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{Level, error, info, warn};
 use uuid::Uuid;
 
 type SharedServerState = Arc<Mutex<ServerState>>;
 
+const PUBLIC_ROOMS: &[(&str, &str)] = &[
+    ("GENERAL", "General Discussion"),
+    ("ARTCAFE", "Art Café"),
+    ("LEARNING", "Learning Corner"),
+];
+
+#[derive(Serialize)]
+pub struct PublicRoomInfoJson {
+    room_id: String,
+    name: String,
+    participant_count: u32,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
-    info!("Starting QUIC server...");
-
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 12345);
-    let (server_config, cert_der) = configure_server()?;
-    info!("Saving server certificate to cert.der");
-    let mut cert_file = File::create("cert.der")?;
-    cert_file.write_all(&cert_der)?;
-    info!("Certificate saved successfully.");
 
     let server_state = Arc::new(Mutex::new(ServerState::new()));
-    let endpoint = Endpoint::server(server_config, addr)?;
-    info!("Listening on {}", addr);
+    {
+        let mut state_guard = server_state.lock().await;
+        for (id, name) in PUBLIC_ROOMS {
+            let room = Room::new(id.to_string(), name.to_string(), Uuid::nil());
+            state_guard.rooms.insert(id.to_string(), room);
+        }
+    }
+
+    let state_clone_for_quic = server_state.clone();
+    tokio::spawn(async move {
+        if let Err(e) = run_quic_server(state_clone_for_quic).await {
+            error!("QUIC server failed: {}", e);
+        }
+    });
+
+    let cors = CorsLayer::new().allow_origin(Any);
+
+    let app = Router::new()
+        .route("/rooms", get(list_public_rooms_handler))
+        .route("/recordings", get(list_recordings_handler))
+        .with_state(server_state)
+        .layer(cors);
+
+    let http_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8080);
+    info!("HTTP server listening on {}", http_addr);
+    let listener = tokio::net::TcpListener::bind(http_addr).await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+
+async fn run_quic_server(state: SharedServerState) -> Result<()> {
+    let quic_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 12345);
+    let (server_config, _) = configure_server()?;
+    let endpoint = Endpoint::server(server_config, quic_addr)?;
+    info!("QUIC server listening on {}", quic_addr);
 
     while let Some(conn_attempt) = endpoint.accept().await {
-        info!("New connection attempt...");
-        let state_clone = server_state.clone();
+        let state_clone = state.clone();
         tokio::spawn(async move {
             match conn_attempt.await {
                 Ok(connection) => {
@@ -62,15 +102,41 @@ async fn main() -> Result<()> {
             }
         });
     }
-
     Ok(())
 }
 
-async fn handle_connection(connection: Connection, state: SharedServerState) -> Result<()> {
-    let remote_addr = connection.remote_address();
-    let (mut send_stream, mut recv_stream) = connection.accept_bi().await?;
-    info!("Accepted initial stream from {}", remote_addr);
+async fn list_public_rooms_handler(
+    State(state): State<SharedServerState>,
+) -> Json<Vec<PublicRoomInfoJson>> {
+    let state_guard = state.lock().await;
+    let rooms_info: Vec<PublicRoomInfoJson> = state_guard
+        .rooms
+        .values()
+        .map(|room| PublicRoomInfoJson {
+            room_id: room.id.clone(),
+            name: room.name.clone(),
+            participant_count: room.participants.len() as u32,
+        })
+        .collect();
+    Json(rooms_info)
+}
 
+async fn list_recordings_handler() -> Json<Vec<String>> {
+    let mut filenames = Vec::new();
+    if let Ok(entries) = fs::read_dir("records") {
+        for entry in entries.flatten() {
+            if let Some(filename) = entry.file_name().to_str() {
+                if filename.ends_with(".binlog") {
+                    filenames.push(filename.to_string());
+                }
+            }
+        }
+    }
+    Json(filenames)
+}
+
+async fn handle_connection(connection: Connection, state: SharedServerState) -> Result<()> {
+    let (mut send_stream, mut recv_stream) = connection.accept_bi().await?;
     let data = recv_stream.read_to_end(1024).await?;
     let message = ClientToServer::decode(&data[..])?;
 
@@ -87,26 +153,22 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                     .collect();
 
                 let logger = RoomLogger::new(&room_id)?;
-                let mut new_room = Room::new(room_id.clone(), client_id);
+                let room_name = format!("{}'s Room", req.username);
+                let mut new_room = Room::new(room_id.clone(), room_name, client_id);
                 let mut log_receiver = new_room.broadcast_sender.subscribe();
-
                 let participant = new_room.add_participant(client_id, req.username.clone());
-
                 let logger_room_id = room_id.clone();
                 tokio::spawn(async move {
-                    info!("Logger task started for room {}", logger_room_id);
                     while let Ok(event) = log_receiver.recv().await {
                         if let Err(e) = logger.log(&event).await {
                             error!("Failed to log event for room {}: {}", logger_room_id, e);
                         }
                     }
-                    info!("Logger task finished for room {}", logger_room_id);
                 });
 
                 {
                     let mut state_guard = state.lock().await;
                     state_guard.rooms.insert(room_id.clone(), new_room);
-                    info!("New room '{}' created by host {}.", room_id, client_id);
                 }
 
                 let response = ServerToClient {
@@ -119,7 +181,6 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                 };
                 send_stream.write_all(&response.encode_to_vec()).await?;
                 send_stream.finish()?;
-
                 return handle_participant_session(connection, state, room_id, participant).await;
             }
             Some(RequestType::JoinRoom(req)) => {
@@ -129,7 +190,6 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                     let room = match state_guard.rooms.get_mut(&req.room_id) {
                         Some(r) => r,
                         None => {
-                            warn!("Room '{}' not found.", req.room_id);
                             let response = ServerToClient {
                                 payload: Some(ServerPayload::InitialResponse(InitialResponse {
                                     response_type: Some(ResponseType::ErrorResponse(
@@ -164,45 +224,15 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                 };
                 send_stream.write_all(&response.encode_to_vec()).await?;
                 send_stream.finish()?;
-
                 return handle_participant_session(connection, state, req.room_id, participant)
                     .await;
             }
             Some(RequestType::ReplayRoom(req)) => {
-                info!("Received ReplayRoomRequest for log: {}", req.log_filename);
-                send_stream.finish()?;
                 return handle_replay_request(connection, req.log_filename).await;
             }
-            Some(RequestType::ListRecordings(_)) => {
-                info!("Received ListRecordingsRequest from {}", remote_addr);
-                let mut filenames = Vec::new();
-                let records_dir = "records";
-
-                if let Ok(entries) = fs::read_dir(records_dir) {
-                    for entry in entries.flatten() {
-                        if let Some(filename) = entry.file_name().to_str() {
-                            if filename.ends_with(".binlog") {
-                                filenames.push(filename.to_string());
-                            }
-                        }
-                    }
-                }
-
-                let response = ServerToClient {
-                    payload: Some(ServerPayload::InitialResponse(InitialResponse {
-                        response_type: Some(ResponseType::ListRecordingsResponse(
-                            ListRecordingsResponse { filenames },
-                        )),
-                    })),
-                };
-
-                send_stream.write_all(&response.encode_to_vec()).await?;
-                send_stream.finish()?;
-                let _ = recv_stream.read_to_end(0).await;
-                info!("Finished sending recording list to {}", remote_addr);
-                return Ok(());
+            _ => {
+                bail!("Invalid or unsupported initial request type for QUIC connection");
             }
-            None => return Err(anyhow!("Invalid initial request type")),
         }
     } else {
         return Err(anyhow!("First message was not an InitialRequest"));
@@ -221,7 +251,6 @@ async fn handle_replay_request(connection: Connection, log_filename: String) -> 
         let len = match reader.read_u32().await {
             Ok(l) => l as usize,
             Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                info!("Finished streaming log file: {}", log_filename);
                 break;
             }
             Err(e) => return Err(e.into()),
@@ -241,7 +270,6 @@ async fn handle_replay_request(connection: Connection, log_filename: String) -> 
         send_stream.finish()?;
     }
 
-    info!("Sending end-of-replay signal to client.");
     let end_event = RoomEvent {
         event_type: Some(EventType::HostEndedSession(HostEndedSession {
             message: "Replay finished.".to_string(),
@@ -254,11 +282,7 @@ async fn handle_replay_request(connection: Connection, log_filename: String) -> 
     final_stream.write_all(&end_message.encode_to_vec()).await?;
     final_stream.finish()?;
 
-    let reason = connection.closed().await;
-    info!(
-        "Connection for replay closed by peer with reason: {:?}",
-        reason
-    );
+    let _ = connection.closed().await;
 
     Ok(())
 }
@@ -319,20 +343,18 @@ async fn handle_participant_session(
 
                     match writer_connection.open_uni().await {
                         Ok(mut send_stream) => {
-                            if let Err(e) = send_stream.write_all(&message.encode_to_vec()).await {
-                                error!(
-                                    "Failed to send message to client {}: {}",
-                                    client_id_clone, e
-                                );
+                            if send_stream
+                                .write_all(&message.encode_to_vec())
+                                .await
+                                .is_err()
+                            {
                                 break;
                             }
-                            let _ = send_stream.finish();
+                            if send_stream.finish().is_err() {
+                                break;
+                            }
                         }
-                        Err(e) => {
-                            error!(
-                                "Failed to open unidirectional stream for client {}: {}",
-                                client_id_clone, e
-                            );
+                        Err(_) => {
                             break;
                         }
                     }
@@ -345,34 +367,30 @@ async fn handle_participant_session(
         }
     });
 
-    loop {
-        match connection.accept_bi().await {
-            Ok((_send, mut recv)) => {
-                let sender = broadcast_sender.clone();
-                let state_clone = state.clone();
-                let room_id_clone = room_id.clone();
-                let current_participant_id = participant.participant_id;
-                tokio::spawn(async move {
-                    if let Err(e) = process_client_stream(
-                        &mut recv,
-                        &sender,
-                        current_participant_id,
-                        state_clone,
-                        &room_id_clone,
-                    )
-                    .await
-                    {
-                        warn!(
-                            "Failed to process stream from client {}: {}",
-                            current_participant_id, e
-                        );
+    tokio::select! {
+        _ = async {
+            loop {
+                match connection.accept_bi().await {
+                    Ok((_send, mut recv)) => {
+                        let sender = broadcast_sender.clone();
+                        let state_clone = state.clone();
+                        let room_id_clone = room_id.clone();
+                        let current_participant_id = participant.participant_id;
+                        tokio::spawn(async move {
+                            if let Err(e) = process_client_stream(&mut recv, &sender, current_participant_id, state_clone, &room_id_clone).await {
+                                warn!("Failed to process stream from client {}: {}", current_participant_id, e);
+                            }
+                        });
                     }
-                });
+                    Err(e) => {
+                        info!("Client {} stream listener failed, likely disconnected: {}", participant.client_id, e);
+                        break;
+                    }
+                }
             }
-            Err(e) => {
-                info!("Client {} disconnected: {}", participant.client_id, e);
-                break;
-            }
+        } => {},
+        reason = connection.closed() => {
+            info!("Connection for client {} closed: {:?}", participant.client_id, reason);
         }
     }
 
@@ -382,7 +400,20 @@ async fn handle_participant_session(
     {
         let mut state_guard = state.lock().await;
         if let Some(room) = state_guard.rooms.get_mut(&room_id) {
-            if participant.client_id == room.host_id {
+            if room.host_id.is_nil() {
+                room.participants.remove(&participant.client_id);
+                info!(
+                    "Removed client {} from permanent room {}",
+                    participant.client_id, room_id
+                );
+                let leave_event = RoomEvent {
+                    event_type: Some(EventType::UserLeft(UserLeft {
+                        participant_id: participant.participant_id,
+                        username: participant.username,
+                    })),
+                };
+                let _ = room.broadcast_sender.send(leave_event);
+            } else if participant.client_id == room.host_id {
                 info!(
                     "Host {} has left room {}. Ending session for all.",
                     participant.client_id, room_id
@@ -470,11 +501,6 @@ async fn process_client_stream(
                     }
                     Some(CommandType::PathEnd(end)) => {
                         if let Some(finished_path) = room.active_paths.remove(&end.path_id) {
-                            info!(
-                                "Storing a full path with {} points in history for room {}",
-                                finished_path.points.len(),
-                                room_id
-                            );
                             room.canvas_history.push(finished_path);
                         }
                     }
@@ -494,7 +520,8 @@ fn configure_server() -> Result<(ServerConfig, Vec<u8>)> {
     let cert_chain = vec![CertificateDer::from(cert_der_bytes.clone())];
 
     let mut transport = TransportConfig::default();
-    transport.max_idle_timeout(Some(std::time::Duration::from_secs(3600 * 24).try_into()?));
+    transport.max_idle_timeout(Some(Duration::from_secs(3600 * 24).try_into()?));
+    transport.keep_alive_interval(Some(Duration::from_secs(5)));
 
     let mut server_config = ServerConfig::with_single_cert(cert_chain, priv_key)?;
     server_config.transport = Arc::new(transport);

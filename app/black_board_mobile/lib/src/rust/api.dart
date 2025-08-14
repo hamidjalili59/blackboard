@@ -39,9 +39,6 @@ Stream<EventMessage> replayRoom({
   logFilename: logFilename,
 );
 
-Future<List<String>> listRecordings({required String serverAddr}) =>
-    RustLib.instance.api.crateApiListRecordings(serverAddr: serverAddr);
-
 BigInt startPath({
   required FlutterPoint point,
   required int color,

@@ -13,6 +13,13 @@ pub struct FlutterPathFull {
 }
 
 #[derive(Debug, Clone)]
+pub struct FlutterPublicRoomInfo {
+    pub room_id: String,
+    pub name: String,
+    pub participant_count: u32,
+}
+
+#[derive(Debug, Clone)]
 pub struct EventMessage {
     pub data: Vec<u8>,
 }

@@ -16,6 +16,7 @@ pub struct Participant {
 
 pub struct Room {
     pub id: RoomId,
+    pub name: String,
     pub participants: HashMap<ClientId, Participant>,
     pub broadcast_sender: broadcast::Sender<RoomEvent>,
     pub host_id: ClientId,
@@ -25,10 +26,11 @@ pub struct Room {
 }
 
 impl Room {
-    pub fn new(id: RoomId, host_id: ClientId) -> Self {
+    pub fn new(id: RoomId, name: String, host_id: ClientId) -> Self {
         let (broadcast_sender, _) = broadcast::channel(1024);
         Room {
             id,
+            name,
             participants: HashMap::new(),
             broadcast_sender,
             host_id,

@@ -109,6 +109,7 @@ enum InitialRequest_RequestType {
   joinRoom,
   replayRoom,
   listRecordings,
+  listPublicRooms,
   notSet
 }
 
@@ -118,12 +119,14 @@ class InitialRequest extends $pb.GeneratedMessage {
     JoinRoomRequest? joinRoom,
     ReplayRoomRequest? replayRoom,
     ListRecordingsRequest? listRecordings,
+    ListPublicRoomsRequest? listPublicRooms,
   }) {
     final result = create();
     if (createRoom != null) result.createRoom = createRoom;
     if (joinRoom != null) result.joinRoom = joinRoom;
     if (replayRoom != null) result.replayRoom = replayRoom;
     if (listRecordings != null) result.listRecordings = listRecordings;
+    if (listPublicRooms != null) result.listPublicRooms = listPublicRooms;
     return result;
   }
 
@@ -142,13 +145,14 @@ class InitialRequest extends $pb.GeneratedMessage {
     2: InitialRequest_RequestType.joinRoom,
     3: InitialRequest_RequestType.replayRoom,
     4: InitialRequest_RequestType.listRecordings,
+    5: InitialRequest_RequestType.listPublicRooms,
     0: InitialRequest_RequestType.notSet
   };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'InitialRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..oo(0, [1, 2, 3, 4])
+    ..oo(0, [1, 2, 3, 4, 5])
     ..aOM<CreateRoomRequest>(1, _omitFieldNames ? '' : 'createRoom',
         subBuilder: CreateRoomRequest.create)
     ..aOM<JoinRoomRequest>(2, _omitFieldNames ? '' : 'joinRoom',
@@ -157,6 +161,8 @@ class InitialRequest extends $pb.GeneratedMessage {
         subBuilder: ReplayRoomRequest.create)
     ..aOM<ListRecordingsRequest>(4, _omitFieldNames ? '' : 'listRecordings',
         subBuilder: ListRecordingsRequest.create)
+    ..aOM<ListPublicRoomsRequest>(5, _omitFieldNames ? '' : 'listPublicRooms',
+        subBuilder: ListPublicRoomsRequest.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -227,6 +233,17 @@ class InitialRequest extends $pb.GeneratedMessage {
   void clearListRecordings() => $_clearField(4);
   @$pb.TagNumber(4)
   ListRecordingsRequest ensureListRecordings() => $_ensure(3);
+
+  @$pb.TagNumber(5)
+  ListPublicRoomsRequest get listPublicRooms => $_getN(4);
+  @$pb.TagNumber(5)
+  set listPublicRooms(ListPublicRoomsRequest value) => $_setField(5, value);
+  @$pb.TagNumber(5)
+  $core.bool hasListPublicRooms() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearListPublicRooms() => $_clearField(5);
+  @$pb.TagNumber(5)
+  ListPublicRoomsRequest ensureListPublicRooms() => $_ensure(4);
 }
 
 class ListRecordingsRequest extends $pb.GeneratedMessage {
@@ -269,6 +286,48 @@ class ListRecordingsRequest extends $pb.GeneratedMessage {
   static ListRecordingsRequest getDefault() => _defaultInstance ??=
       $pb.GeneratedMessage.$_defaultFor<ListRecordingsRequest>(create);
   static ListRecordingsRequest? _defaultInstance;
+}
+
+class ListPublicRoomsRequest extends $pb.GeneratedMessage {
+  factory ListPublicRoomsRequest() => create();
+
+  ListPublicRoomsRequest._();
+
+  factory ListPublicRoomsRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListPublicRoomsRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListPublicRoomsRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListPublicRoomsRequest clone() =>
+      ListPublicRoomsRequest()..mergeFromMessage(this);
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListPublicRoomsRequest copyWith(
+          void Function(ListPublicRoomsRequest) updates) =>
+      super.copyWith((message) => updates(message as ListPublicRoomsRequest))
+          as ListPublicRoomsRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListPublicRoomsRequest create() => ListPublicRoomsRequest._();
+  @$core.override
+  ListPublicRoomsRequest createEmptyInstance() => create();
+  static $pb.PbList<ListPublicRoomsRequest> createRepeated() =>
+      $pb.PbList<ListPublicRoomsRequest>();
+  @$core.pragma('dart2js:noInline')
+  static ListPublicRoomsRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListPublicRoomsRequest>(create);
+  static ListPublicRoomsRequest? _defaultInstance;
 }
 
 class CreateRoomRequest extends $pb.GeneratedMessage {
@@ -1182,6 +1241,7 @@ enum InitialResponse_ResponseType {
   joinRoomResponse,
   errorResponse,
   listRecordingsResponse,
+  listPublicRoomsResponse,
   notSet
 }
 
@@ -1191,6 +1251,7 @@ class InitialResponse extends $pb.GeneratedMessage {
     JoinRoomResponse? joinRoomResponse,
     ErrorResponse? errorResponse,
     ListRecordingsResponse? listRecordingsResponse,
+    ListPublicRoomsResponse? listPublicRoomsResponse,
   }) {
     final result = create();
     if (createRoomResponse != null)
@@ -1199,6 +1260,8 @@ class InitialResponse extends $pb.GeneratedMessage {
     if (errorResponse != null) result.errorResponse = errorResponse;
     if (listRecordingsResponse != null)
       result.listRecordingsResponse = listRecordingsResponse;
+    if (listPublicRoomsResponse != null)
+      result.listPublicRoomsResponse = listPublicRoomsResponse;
     return result;
   }
 
@@ -1217,13 +1280,14 @@ class InitialResponse extends $pb.GeneratedMessage {
     2: InitialResponse_ResponseType.joinRoomResponse,
     3: InitialResponse_ResponseType.errorResponse,
     4: InitialResponse_ResponseType.listRecordingsResponse,
+    5: InitialResponse_ResponseType.listPublicRoomsResponse,
     0: InitialResponse_ResponseType.notSet
   };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'InitialResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..oo(0, [1, 2, 3, 4])
+    ..oo(0, [1, 2, 3, 4, 5])
     ..aOM<CreateRoomResponse>(1, _omitFieldNames ? '' : 'createRoomResponse',
         subBuilder: CreateRoomResponse.create)
     ..aOM<JoinRoomResponse>(2, _omitFieldNames ? '' : 'joinRoomResponse',
@@ -1233,6 +1297,9 @@ class InitialResponse extends $pb.GeneratedMessage {
     ..aOM<ListRecordingsResponse>(
         4, _omitFieldNames ? '' : 'listRecordingsResponse',
         subBuilder: ListRecordingsResponse.create)
+    ..aOM<ListPublicRoomsResponse>(
+        5, _omitFieldNames ? '' : 'listPublicRoomsResponse',
+        subBuilder: ListPublicRoomsResponse.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1304,6 +1371,18 @@ class InitialResponse extends $pb.GeneratedMessage {
   void clearListRecordingsResponse() => $_clearField(4);
   @$pb.TagNumber(4)
   ListRecordingsResponse ensureListRecordingsResponse() => $_ensure(3);
+
+  @$pb.TagNumber(5)
+  ListPublicRoomsResponse get listPublicRoomsResponse => $_getN(4);
+  @$pb.TagNumber(5)
+  set listPublicRoomsResponse(ListPublicRoomsResponse value) =>
+      $_setField(5, value);
+  @$pb.TagNumber(5)
+  $core.bool hasListPublicRoomsResponse() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearListPublicRoomsResponse() => $_clearField(5);
+  @$pb.TagNumber(5)
+  ListPublicRoomsResponse ensureListPublicRoomsResponse() => $_ensure(4);
 }
 
 class ListRecordingsResponse extends $pb.GeneratedMessage {
@@ -1358,7 +1437,140 @@ class ListRecordingsResponse extends $pb.GeneratedMessage {
   $pb.PbList<$core.String> get filenames => $_getList(0);
 }
 
-/// برای سادگی کلاینت، سرور participant_id را مستقیم ارسال می‌کند
+class PublicRoomInfo extends $pb.GeneratedMessage {
+  factory PublicRoomInfo({
+    $core.String? roomId,
+    $core.String? name,
+    $core.int? participantCount,
+  }) {
+    final result = create();
+    if (roomId != null) result.roomId = roomId;
+    if (name != null) result.name = name;
+    if (participantCount != null) result.participantCount = participantCount;
+    return result;
+  }
+
+  PublicRoomInfo._();
+
+  factory PublicRoomInfo.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PublicRoomInfo.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PublicRoomInfo',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'roomId')
+    ..aOS(2, _omitFieldNames ? '' : 'name')
+    ..a<$core.int>(
+        3, _omitFieldNames ? '' : 'participantCount', $pb.PbFieldType.OU3)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PublicRoomInfo clone() => PublicRoomInfo()..mergeFromMessage(this);
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PublicRoomInfo copyWith(void Function(PublicRoomInfo) updates) =>
+      super.copyWith((message) => updates(message as PublicRoomInfo))
+          as PublicRoomInfo;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PublicRoomInfo create() => PublicRoomInfo._();
+  @$core.override
+  PublicRoomInfo createEmptyInstance() => create();
+  static $pb.PbList<PublicRoomInfo> createRepeated() =>
+      $pb.PbList<PublicRoomInfo>();
+  @$core.pragma('dart2js:noInline')
+  static PublicRoomInfo getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<PublicRoomInfo>(create);
+  static PublicRoomInfo? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get roomId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set roomId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasRoomId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearRoomId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get name => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set name($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearName() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.int get participantCount => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set participantCount($core.int value) => $_setUnsignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasParticipantCount() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearParticipantCount() => $_clearField(3);
+}
+
+class ListPublicRoomsResponse extends $pb.GeneratedMessage {
+  factory ListPublicRoomsResponse({
+    $core.Iterable<PublicRoomInfo>? rooms,
+  }) {
+    final result = create();
+    if (rooms != null) result.rooms.addAll(rooms);
+    return result;
+  }
+
+  ListPublicRoomsResponse._();
+
+  factory ListPublicRoomsResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListPublicRoomsResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListPublicRoomsResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
+      createEmptyInstance: create)
+    ..pc<PublicRoomInfo>(1, _omitFieldNames ? '' : 'rooms', $pb.PbFieldType.PM,
+        subBuilder: PublicRoomInfo.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListPublicRoomsResponse clone() =>
+      ListPublicRoomsResponse()..mergeFromMessage(this);
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListPublicRoomsResponse copyWith(
+          void Function(ListPublicRoomsResponse) updates) =>
+      super.copyWith((message) => updates(message as ListPublicRoomsResponse))
+          as ListPublicRoomsResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListPublicRoomsResponse create() => ListPublicRoomsResponse._();
+  @$core.override
+  ListPublicRoomsResponse createEmptyInstance() => create();
+  static $pb.PbList<ListPublicRoomsResponse> createRepeated() =>
+      $pb.PbList<ListPublicRoomsResponse>();
+  @$core.pragma('dart2js:noInline')
+  static ListPublicRoomsResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListPublicRoomsResponse>(create);
+  static ListPublicRoomsResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<PublicRoomInfo> get rooms => $_getList(0);
+}
+
 class CreateRoomResponse extends $pb.GeneratedMessage {
   factory CreateRoomResponse({
     $core.String? roomId,

@@ -4,14 +4,17 @@ use crate::proto::{
     client_to_server::Payload as ClientPayload, initial_request::RequestType,
     initial_response::ResponseType, room_message::Payload as RoomMessagePayload,
     server_to_client::Payload as ServerPayload, ClientToServer, CreateRoomRequest, InitialRequest,
-    JoinRoomRequest, ListRecordingsRequest, ReplayRoomRequest, RoomMessage, ServerToClient,
+    JoinRoomRequest, ReplayRoomRequest, RoomMessage, ServerToClient,
 };
 use anyhow::{anyhow, bail, Result};
 use prost::Message;
-use quinn::{crypto::rustls::QuicClientConfig, ClientConfig, Connection, Endpoint};
+use quinn::{
+    crypto::rustls::QuicClientConfig, ClientConfig, Connection, Endpoint, TransportConfig,
+};
 use rustls::pki_types::{CertificateDer, ServerName};
 use rustls::SignatureScheme;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
@@ -41,36 +44,6 @@ impl ClientState {
             .ok_or_else(|| anyhow!("Cannot generate path_id without a participant_id"))?;
         self.path_counter += 1;
         Ok((participant_id as u64) << 32 | self.path_counter)
-    }
-
-    pub async fn list_recordings(&mut self, server_addr: String) -> Result<Vec<String>> {
-        let server_socket_addr = server_addr.parse()?;
-        let conn = self
-            .endpoint
-            .connect(server_socket_addr, "localhost")?
-            .await?;
-        let (mut send, mut recv) = conn.open_bi().await?;
-        let request = ClientToServer {
-            payload: Some(ClientPayload::InitialRequest(InitialRequest {
-                request_type: Some(RequestType::ListRecordings(ListRecordingsRequest {})),
-            })),
-        };
-        send.write_all(&request.encode_to_vec()).await?;
-        send.finish()?;
-        let response_bytes = recv.read_to_end(1024 * 10).await?;
-        let response = ServerToClient::decode(&response_bytes[..])?;
-
-        if let Some(ServerPayload::InitialResponse(initial_response)) = response.payload {
-            if let Some(ResponseType::ListRecordingsResponse(list_response)) =
-                initial_response.response_type
-            {
-                Ok(list_response.filenames)
-            } else {
-                bail!("Unexpected response type for list recordings.")
-            }
-        } else {
-            bail!("Invalid response for list recordings.")
-        }
     }
 
     pub async fn create_room(&mut self, server_addr: String, username: String) -> Result<String> {
@@ -106,14 +79,12 @@ impl ClientState {
         }
     }
 
-    // CHANGED: دیگر sink نمی‌گیرد
     pub async fn join_room(
         &mut self,
         server_addr: String,
         username: String,
         room_id: String,
     ) -> Result<Vec<FlutterPathFull>> {
-        // CHANGED: خروجی تغییر کرد
         let server_socket_addr = server_addr.parse()?;
         let conn = self
             .endpoint
@@ -137,7 +108,6 @@ impl ClientState {
                 self.connection = Some(conn);
                 self.participant_id = Some(join_response.participant_id);
 
-                // CHANGED: پردازش snapshot و تبدیل آن به خروجی تابع
                 let initial_paths = if let Some(snapshot) = join_response.initial_canvas_state {
                     snapshot
                         .paths
@@ -171,7 +141,6 @@ impl ClientState {
         }
     }
 
-    // NEW: این تابع دوباره فعال شد
     pub async fn listen_events(
         &self,
         events_sink: Arc<Mutex<StreamSink<EventMessage>>>,
@@ -319,5 +288,14 @@ fn configure_client() -> Result<ClientConfig> {
         .with_no_client_auth();
 
     let quic_crypto = QuicClientConfig::try_from(crypto)?;
-    Ok(ClientConfig::new(Arc::new(quic_crypto)))
+
+    let mut client_config = ClientConfig::new(Arc::new(quic_crypto));
+
+    let mut transport_config = TransportConfig::default();
+    transport_config.max_idle_timeout(Some(Duration::from_secs(3600 * 24).try_into()?));
+    transport_config.keep_alive_interval(Some(Duration::from_secs(20)));
+
+    client_config.transport_config(Arc::new(transport_config));
+
+    Ok(client_config)
 }

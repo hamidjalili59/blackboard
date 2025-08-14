@@ -89,6 +89,15 @@ const InitialRequest$json = {
       '9': 0,
       '10': 'listRecordings'
     },
+    {
+      '1': 'list_public_rooms',
+      '3': 5,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.ListPublicRoomsRequest',
+      '9': 0,
+      '10': 'listPublicRooms'
+    },
   ],
   '8': [
     {'1': 'request_type'},
@@ -102,7 +111,9 @@ final $typed_data.Uint8List initialRequestDescriptor = $convert.base64Decode(
     'dW5pY2F0aW9uLkpvaW5Sb29tUmVxdWVzdEgAUghqb2luUm9vbRJDCgtyZXBsYXlfcm9vbRgDIA'
     'EoCzIgLmNvbW11bmljYXRpb24uUmVwbGF5Um9vbVJlcXVlc3RIAFIKcmVwbGF5Um9vbRJPCg9s'
     'aXN0X3JlY29yZGluZ3MYBCABKAsyJC5jb21tdW5pY2F0aW9uLkxpc3RSZWNvcmRpbmdzUmVxdW'
-    'VzdEgAUg5saXN0UmVjb3JkaW5nc0IOCgxyZXF1ZXN0X3R5cGU=');
+    'VzdEgAUg5saXN0UmVjb3JkaW5ncxJTChFsaXN0X3B1YmxpY19yb29tcxgFIAEoCzIlLmNvbW11'
+    'bmljYXRpb24uTGlzdFB1YmxpY1Jvb21zUmVxdWVzdEgAUg9saXN0UHVibGljUm9vbXNCDgoMcm'
+    'VxdWVzdF90eXBl');
 
 @$core.Deprecated('Use listRecordingsRequestDescriptor instead')
 const ListRecordingsRequest$json = {
@@ -112,6 +123,15 @@ const ListRecordingsRequest$json = {
 /// Descriptor for `ListRecordingsRequest`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List listRecordingsRequestDescriptor =
     $convert.base64Decode('ChVMaXN0UmVjb3JkaW5nc1JlcXVlc3Q=');
+
+@$core.Deprecated('Use listPublicRoomsRequestDescriptor instead')
+const ListPublicRoomsRequest$json = {
+  '1': 'ListPublicRoomsRequest',
+};
+
+/// Descriptor for `ListPublicRoomsRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listPublicRoomsRequestDescriptor =
+    $convert.base64Decode('ChZMaXN0UHVibGljUm9vbXNSZXF1ZXN0');
 
 @$core.Deprecated('Use createRoomRequestDescriptor instead')
 const CreateRoomRequest$json = {
@@ -413,6 +433,15 @@ const InitialResponse$json = {
       '9': 0,
       '10': 'listRecordingsResponse'
     },
+    {
+      '1': 'list_public_rooms_response',
+      '3': 5,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.ListPublicRoomsResponse',
+      '9': 0,
+      '10': 'listPublicRoomsResponse'
+    },
   ],
   '8': [
     {'1': 'response_type'},
@@ -427,7 +456,9 @@ final $typed_data.Uint8List initialResponseDescriptor = $convert.base64Decode(
     'BSEGpvaW5Sb29tUmVzcG9uc2USRQoOZXJyb3JfcmVzcG9uc2UYAyABKAsyHC5jb21tdW5pY2F0'
     'aW9uLkVycm9yUmVzcG9uc2VIAFINZXJyb3JSZXNwb25zZRJhChhsaXN0X3JlY29yZGluZ3Nfcm'
     'VzcG9uc2UYBCABKAsyJS5jb21tdW5pY2F0aW9uLkxpc3RSZWNvcmRpbmdzUmVzcG9uc2VIAFIW'
-    'bGlzdFJlY29yZGluZ3NSZXNwb25zZUIPCg1yZXNwb25zZV90eXBl');
+    'bGlzdFJlY29yZGluZ3NSZXNwb25zZRJlChpsaXN0X3B1YmxpY19yb29tc19yZXNwb25zZRgFIA'
+    'EoCzImLmNvbW11bmljYXRpb24uTGlzdFB1YmxpY1Jvb21zUmVzcG9uc2VIAFIXbGlzdFB1Ymxp'
+    'Y1Jvb21zUmVzcG9uc2VCDwoNcmVzcG9uc2VfdHlwZQ==');
 
 @$core.Deprecated('Use listRecordingsResponseDescriptor instead')
 const ListRecordingsResponse$json = {
@@ -441,6 +472,48 @@ const ListRecordingsResponse$json = {
 final $typed_data.Uint8List listRecordingsResponseDescriptor =
     $convert.base64Decode(
         'ChZMaXN0UmVjb3JkaW5nc1Jlc3BvbnNlEhwKCWZpbGVuYW1lcxgBIAMoCVIJZmlsZW5hbWVz');
+
+@$core.Deprecated('Use publicRoomInfoDescriptor instead')
+const PublicRoomInfo$json = {
+  '1': 'PublicRoomInfo',
+  '2': [
+    {'1': 'room_id', '3': 1, '4': 1, '5': 9, '10': 'roomId'},
+    {'1': 'name', '3': 2, '4': 1, '5': 9, '10': 'name'},
+    {
+      '1': 'participant_count',
+      '3': 3,
+      '4': 1,
+      '5': 13,
+      '10': 'participantCount'
+    },
+  ],
+};
+
+/// Descriptor for `PublicRoomInfo`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List publicRoomInfoDescriptor = $convert.base64Decode(
+    'Cg5QdWJsaWNSb29tSW5mbxIXCgdyb29tX2lkGAEgASgJUgZyb29tSWQSEgoEbmFtZRgCIAEoCV'
+    'IEbmFtZRIrChFwYXJ0aWNpcGFudF9jb3VudBgDIAEoDVIQcGFydGljaXBhbnRDb3VudA==');
+
+@$core.Deprecated('Use listPublicRoomsResponseDescriptor instead')
+const ListPublicRoomsResponse$json = {
+  '1': 'ListPublicRoomsResponse',
+  '2': [
+    {
+      '1': 'rooms',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.communication.PublicRoomInfo',
+      '10': 'rooms'
+    },
+  ],
+};
+
+/// Descriptor for `ListPublicRoomsResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listPublicRoomsResponseDescriptor =
+    $convert.base64Decode(
+        'ChdMaXN0UHVibGljUm9vbXNSZXNwb25zZRIzCgVyb29tcxgBIAMoCzIdLmNvbW11bmljYXRpb2'
+        '4uUHVibGljUm9vbUluZm9SBXJvb21z');
 
 @$core.Deprecated('Use createRoomResponseDescriptor instead')
 const CreateRoomResponse$json = {

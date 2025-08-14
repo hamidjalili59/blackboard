@@ -30,7 +30,6 @@ pub fn init_app() {
     let _ = tracing::subscriber::set_global_default(subscriber);
 }
 
-// CHANGED: دیگر sink نمی‌گیرد و String برمی‌گرداند
 pub fn create_room(server_addr: String, username: String) -> Result<String> {
     TOKIO_RUNTIME.block_on(async {
         let mut state = CLIENT_STATE.lock().await;
@@ -38,7 +37,6 @@ pub fn create_room(server_addr: String, username: String) -> Result<String> {
     })
 }
 
-// CHANGED: دیگر sink نمی‌گیرد
 pub fn join_room(
     server_addr: String,
     username: String,
@@ -50,7 +48,6 @@ pub fn join_room(
     })
 }
 
-// NEW: این تابع دوباره عمومی شد
 pub fn listen_events(events_sink: StreamSink<EventMessage>) -> Result<()> {
     TOKIO_RUNTIME.block_on(async {
         let state = CLIENT_STATE.lock().await;
@@ -68,13 +65,6 @@ pub fn replay_room(
         replay_client
             .replay_room(server_addr, log_filename, Arc::new(Mutex::new(events_sink)))
             .await
-    })
-}
-
-pub fn list_recordings(server_addr: String) -> Result<Vec<String>> {
-    TOKIO_RUNTIME.block_on(async {
-        let mut client = ClientState::new()?;
-        client.list_recordings(server_addr).await
     })
 }
 

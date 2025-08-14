@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:black_board_mobile/src/rust/api.dart';
-import 'package:black_board_mobile/src/rust/bridge_models.dart';
+import 'package:black_board_mobile/src/rust/bridge_models.dart' as rust;
 import 'package:black_board_mobile/src/rust/frb_generated.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -18,7 +20,7 @@ class PathData {
   final Color color;
   final double strokeWidth;
 
-  PathData.fromRust(FlutterPathFull rustPath)
+  PathData.fromRust(rust.FlutterPathFull rustPath)
     : id = rustPath.pathId,
       points = rustPath.points.map((p) => Offset(p.dx, p.dy)).toList(),
       color = Color(rustPath.color),
@@ -30,6 +32,26 @@ class PathData {
     required this.color,
     required this.strokeWidth,
   });
+}
+
+class PublicRoomInfo {
+  final String roomId;
+  final String name;
+  final int participantCount;
+
+  PublicRoomInfo({
+    required this.roomId,
+    required this.name,
+    required this.participantCount,
+  });
+
+  factory PublicRoomInfo.fromJson(Map<String, dynamic> json) {
+    return PublicRoomInfo(
+      roomId: json['room_id'] as String,
+      name: json['name'] as String,
+      participantCount: json['participant_count'] as int,
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -54,7 +76,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final _serverAddrController = TextEditingController(
-    text: '107.173.62.153:12345',
+    text: 'YOUR_SERVER_IP:12345',
   );
   final _usernameController = TextEditingController(text: 'FlutterUser');
   final _roomIdController = TextEditingController();
@@ -73,11 +95,23 @@ class _MyHomePageState extends State<MyHomePage> {
 
   List<String> _recordings = [];
   bool _isLoadingRecordings = false;
+
+  List<PublicRoomInfo> _publicRooms = [];
+  bool _isLoadingPublicRooms = false;
+
   bool _isReplaying = false;
+  int? _replayStartWallClock;
+  BigInt? _replayStartEventTimestamp;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPublicRooms();
+  }
 
   @override
   void dispose() {
-    _disconnect();
+    _disconnect(isFinal: true);
     _serverAddrController.dispose();
     _usernameController.dispose();
     _roomIdController.dispose();
@@ -90,11 +124,11 @@ class _MyHomePageState extends State<MyHomePage> {
     _eventSubscription = stream.listen(
       _handleRoomEvent,
       onError: (e) => _showErrorDialog(e.toString()),
-      onDone: _disconnect,
+      onDone: () => _disconnect(isFinal: true),
     );
   }
 
-  void _handleRoomEvent(EventMessage event) {
+  void _handleRoomEvent(rust.EventMessage event) {
     try {
       final roomEvent = proto.RoomEvent.fromBuffer(event.data);
 
@@ -114,44 +148,50 @@ class _MyHomePageState extends State<MyHomePage> {
         }
         if (mounted) setState(() => _paths = newPaths);
       } else if (roomEvent.hasCanvasCommand()) {
-        final command = roomEvent.canvasCommand.command;
-        if (mounted) {
-          setState(() {
-            if (command.hasPathStart()) {
-              final pathStart = command.pathStart;
-              final pathId = BigInt.parse(pathStart.pathId.toString());
-              _paths[pathId] = PathData(
-                id: pathId,
-                points: [
-                  Offset(
-                    pathStart.point.dx.toDouble(),
-                    pathStart.point.dy.toDouble(),
-                  ),
-                ],
-                color: Color(pathStart.color),
-                strokeWidth: pathStart.strokeWidth.toDouble(),
-              );
-            } else if (command.hasPathAppend()) {
-              final pathAppend = command.pathAppend;
-              final pathId = BigInt.parse(pathAppend.pathId.toString());
-              if (_paths.containsKey(pathId)) {
-                _paths[pathId]!.points.add(
-                  Offset(
-                    pathAppend.point.dx.toDouble(),
-                    pathAppend.point.dy.toDouble(),
-                  ),
-                );
-              }
-            }
-          });
-        }
+        _applyCanvasCommand(roomEvent.canvasCommand.command);
       } else if (roomEvent.hasHostEndedSession()) {
-        _showErrorDialog("The host has ended the session.");
-        _disconnect();
+        if (_isReplaying) {
+          _handleReplayFinished();
+        } else {
+          _showErrorDialog("The host has ended the session.");
+          _disconnect(isFinal: true);
+        }
       }
     } catch (e) {
       debugPrint("Failed to parse event: $e");
     }
+  }
+
+  void _applyCanvasCommand(proto.CanvasCommand command) {
+    if (!mounted) return;
+    setState(() {
+      if (command.hasPathStart()) {
+        final pathStart = command.pathStart;
+        final pathId = BigInt.parse(pathStart.pathId.toString());
+        _paths[pathId] = PathData(
+          id: pathId,
+          points: [
+            Offset(
+              pathStart.point.dx.toDouble(),
+              pathStart.point.dy.toDouble(),
+            ),
+          ],
+          color: Color(pathStart.color),
+          strokeWidth: pathStart.strokeWidth.toDouble(),
+        );
+      } else if (command.hasPathAppend()) {
+        final pathAppend = command.pathAppend;
+        final pathId = BigInt.parse(pathAppend.pathId.toString());
+        if (_paths.containsKey(pathId)) {
+          _paths[pathId]!.points.add(
+            Offset(
+              pathAppend.point.dx.toDouble(),
+              pathAppend.point.dy.toDouble(),
+            ),
+          );
+        }
+      }
+    });
   }
 
   void _createRoom() async {
@@ -192,7 +232,7 @@ class _MyHomePageState extends State<MyHomePage> {
         setState(() {
           _isConnected = true;
           _roomId = _roomIdController.text;
-          _paths = newPaths; // نمایش نقاشی‌های قبلی
+          _paths = newPaths;
         });
       }
 
@@ -202,20 +242,39 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void _disconnect() {
+  void _disconnect({bool isFinal = false}) {
     if (!_isConnected && !_isReplaying) return;
+
     _eventSubscription?.cancel();
     _eventSubscription = null;
+
     if (_isConnected) {
       disconnect();
     }
+
     if (mounted) {
       setState(() {
         _isConnected = false;
         _isReplaying = false;
         _roomId = null;
-        _paths = {};
+        if (isFinal) {
+          _paths = {};
+        }
       });
+      _fetchPublicRooms();
+    }
+  }
+
+  void _handleReplayFinished() {
+    _eventSubscription?.cancel();
+    _eventSubscription = null;
+    if (mounted) {
+      setState(() {
+        _isReplaying = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Replay finished!')));
     }
   }
 
@@ -223,7 +282,7 @@ class _MyHomePageState extends State<MyHomePage> {
     if (!_isConnected) return;
 
     final newPathId = startPath(
-      point: FlutterPoint(
+      point: rust.FlutterPoint(
         dx: details.localPosition.dx,
         dy: details.localPosition.dy,
       ),
@@ -252,7 +311,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     appendToPath(
       pathId: _currentPathId!,
-      point: FlutterPoint(
+      point: rust.FlutterPoint(
         dx: details.localPosition.dx,
         dy: details.localPosition.dy,
       ),
@@ -315,19 +374,59 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  void _fetchRecordings() async {
-    setState(() => _isLoadingRecordings = true);
+  Future<void> _fetchPublicRooms() async {
+    setState(() => _isLoadingPublicRooms = true);
     try {
-      final filenames = await listRecordings(
-        serverAddr: _serverAddrController.text,
-      );
-      if (mounted) {
-        setState(() {
-          _recordings = filenames;
-        });
+      final serverIp = _serverAddrController.text.split(':')[0];
+      if (serverIp.isEmpty) throw Exception("Server address is not set");
+
+      final url = Uri.parse('http://$serverIp:8080/rooms');
+      final response = await http.get(url).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> roomsJson = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _publicRooms = roomsJson
+                .map((json) => PublicRoomInfo.fromJson(json))
+                .toList();
+          });
+        }
+      } else {
+        throw Exception('Failed to load rooms: ${response.statusCode}');
       }
     } catch (e) {
-      _showErrorDialog(e.toString());
+      _showErrorDialog("Could not fetch public rooms: ${e.toString()}");
+      if (mounted) setState(() => _publicRooms = []);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingPublicRooms = false);
+      }
+    }
+  }
+
+  Future<void> _fetchRecordings() async {
+    setState(() => _isLoadingRecordings = true);
+    try {
+      final serverIp = _serverAddrController.text.split(':')[0];
+      if (serverIp.isEmpty) throw Exception("Server address is not set");
+
+      final url = Uri.parse('http://$serverIp:8080/recordings');
+      final response = await http.get(url).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> recordingsJson = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _recordings = recordingsJson.cast<String>();
+          });
+        }
+      } else {
+        throw Exception('Failed to load recordings: ${response.statusCode}');
+      }
+    } catch (e) {
+      _showErrorDialog("Could not fetch recordings: ${e.toString()}");
+      if (mounted) setState(() => _recordings = []);
     } finally {
       if (mounted) {
         setState(() => _isLoadingRecordings = false);
@@ -343,6 +442,8 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _paths = {};
       _isReplaying = true;
+      _replayStartWallClock = null;
+      _replayStartEventTimestamp = null;
     });
 
     final stream = replayRoom(
@@ -351,22 +452,49 @@ class _MyHomePageState extends State<MyHomePage> {
     );
 
     _eventSubscription = stream.listen(
-      (event) {
-        _handleRoomEvent(event);
-      },
+      _handleReplayEvent,
       onError: (e) {
         _showErrorDialog(e.toString());
-        _disconnect();
+        _disconnect(isFinal: true);
       },
-      onDone: () {
-        _disconnect();
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Replay finished!')));
-        }
-      },
+      onDone: () => _handleReplayFinished(),
     );
+  }
+
+  void _handleReplayEvent(rust.EventMessage event) {
+    try {
+      final roomEvent = proto.RoomEvent.fromBuffer(event.data);
+      if (roomEvent.hasHostEndedSession()) {
+        _handleReplayFinished();
+        return;
+      }
+
+      if (!roomEvent.hasCanvasCommand()) return;
+      final command = roomEvent.canvasCommand.command;
+
+      if (_replayStartWallClock == null || _replayStartEventTimestamp == null) {
+        _replayStartWallClock = DateTime.now().millisecondsSinceEpoch;
+        _replayStartEventTimestamp = BigInt.parse(
+          command.timestampMs.toString(),
+        );
+      }
+
+      final eventTimestamp = BigInt.parse(command.timestampMs.toString());
+      final eventTimeOffset = (eventTimestamp - _replayStartEventTimestamp!)
+          .toInt();
+      final wallClockOffset =
+          DateTime.now().millisecondsSinceEpoch - _replayStartWallClock!;
+
+      final delay = eventTimeOffset - wallClockOffset;
+
+      Future.delayed(Duration(milliseconds: delay > 0 ? delay : 0), () {
+        if (_isReplaying) {
+          _applyCanvasCommand(command);
+        }
+      });
+    } catch (e) {
+      debugPrint("Failed to handle replay event: $e");
+    }
   }
 
   @override
@@ -423,7 +551,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     TextField(
                       controller: _serverAddrController,
                       decoration: const InputDecoration(
-                        labelText: 'Server Address',
+                        labelText: 'Server Address (QUIC Port)',
                       ),
                       enabled: controlsEnabled,
                     ),
@@ -460,12 +588,83 @@ class _MyHomePageState extends State<MyHomePage> {
                           child: const Text('Create Room'),
                         ),
                         FilledButton.tonal(
-                          onPressed: _isConnected ? _disconnect : null,
+                          onPressed: _isConnected || _isReplaying
+                              ? () => _disconnect(isFinal: true)
+                              : null,
                           child: const Text('Disconnect'),
                         ),
                       ],
                     ),
-                    const Divider(height: 32),
+                    const Divider(height: 24),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Public Rooms",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh),
+                          onPressed: _isLoadingPublicRooms || !controlsEnabled
+                              ? null
+                              : _fetchPublicRooms,
+                        ),
+                      ],
+                    ),
+                    _isLoadingPublicRooms
+                        ? const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : _publicRooms.isEmpty
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8.0),
+                              child: Text("No public rooms. Press refresh."),
+                            ),
+                          )
+                        : SizedBox(
+                            height: 150,
+                            child: ListView.builder(
+                              itemCount: _publicRooms.length,
+                              itemBuilder: (context, index) {
+                                final room = _publicRooms[index];
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  child: ListTile(
+                                    title: Text(room.name),
+                                    subtitle: Text("ID: ${room.roomId}"),
+                                    leading: const Icon(
+                                      Icons.group_work_outlined,
+                                    ),
+                                    trailing: Chip(
+                                      avatar: const Icon(
+                                        Icons.person,
+                                        size: 16,
+                                      ),
+                                      label: Text("${room.participantCount}"),
+                                      padding: const EdgeInsets.all(4),
+                                      labelStyle: const TextStyle(fontSize: 12),
+                                    ),
+                                    onTap: controlsEnabled
+                                        ? () {
+                                            _roomIdController.text =
+                                                room.roomId;
+                                            _joinRoom();
+                                          }
+                                        : null,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                    const Divider(height: 24),
+
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -485,11 +684,16 @@ class _MyHomePageState extends State<MyHomePage> {
                       ],
                     ),
                     _isLoadingRecordings
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : _recordings.isEmpty
                         ? const Center(
-                            child: Text(
-                              "No recordings found. Press refresh to fetch.",
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8.0),
+                              child: Text(
+                                "No recordings found. Press refresh.",
+                              ),
                             ),
                           )
                         : SizedBox(
@@ -498,17 +702,23 @@ class _MyHomePageState extends State<MyHomePage> {
                               itemCount: _recordings.length,
                               itemBuilder: (context, index) {
                                 final filename = _recordings[index];
-                                return ListTile(
-                                  title: Text(
-                                    filename,
-                                    style: const TextStyle(fontSize: 12),
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 4,
                                   ),
-                                  leading: const Icon(
-                                    Icons.movie_creation_outlined,
+                                  child: ListTile(
+                                    title: Text(
+                                      filename,
+                                      style: const TextStyle(fontSize: 12),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    leading: const Icon(
+                                      Icons.movie_creation_outlined,
+                                    ),
+                                    onTap: controlsEnabled
+                                        ? () => _startReplay(filename)
+                                        : null,
                                   ),
-                                  onTap: controlsEnabled
-                                      ? () => _startReplay(filename)
-                                      : null,
                                 );
                               },
                             ),

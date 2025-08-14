@@ -19,10 +19,13 @@ message InitialRequest {
         JoinRoomRequest join_room = 2;
         ReplayRoomRequest replay_room = 3;
         ListRecordingsRequest list_recordings = 4;
+        ListPublicRoomsRequest list_public_rooms = 5;
     }
 }
 
 message ListRecordingsRequest {}
+
+message ListPublicRoomsRequest {}
 
 message CreateRoomRequest {
     string username = 1;
@@ -77,7 +80,7 @@ message CanvasCommand {
   oneof command_type {
     PathStart path_start = 2;
     PathAppend path_append = 3;
-    PathEnd path_end = 4; // PathFull حذف و PathEnd اضافه شد
+    PathEnd path_end = 4;
   }
 }
 
@@ -104,6 +107,7 @@ message InitialResponse {
         JoinRoomResponse join_room_response = 2;
         ErrorResponse error_response = 3;
         ListRecordingsResponse list_recordings_response = 4;
+        ListPublicRoomsResponse list_public_rooms_response = 5;
     }
 }
 
@@ -111,7 +115,16 @@ message ListRecordingsResponse {
     repeated string filenames = 1;
 }
 
-// برای سادگی کلاینت، سرور participant_id را مستقیم ارسال می‌کند
+message PublicRoomInfo {
+    string room_id = 1;
+    string name = 2;
+    uint32 participant_count = 3;
+}
+
+message ListPublicRoomsResponse {
+    repeated PublicRoomInfo rooms = 1;
+}
+
 message CreateRoomResponse {
     string room_id = 1;
     uint32 participant_id = 2;
@@ -149,7 +162,7 @@ message HostEndedSession {
 message UserJoined {
     uint32 participant_id = 1;
     string username = 2;
-    string client_id_uuid = 3; // برای لاگ کردن یا دیباگ
+    string client_id_uuid = 3;
 }
 
 message UserLeft {
