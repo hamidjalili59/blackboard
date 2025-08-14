@@ -52,7 +52,7 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final _serverAddrController = TextEditingController(text: '127.0.0.1:12345');
+  final _serverAddrController = TextEditingController(text: '107.173.62.153:12345');
   final _usernameController = TextEditingController(text: 'FlutterUser');
   final _roomIdController = TextEditingController();
 

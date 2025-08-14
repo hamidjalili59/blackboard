@@ -35,6 +35,51 @@ impl ClientState {
         })
     }
 
+    // *** متد جدید برای ارسال درخواست لیست و دریافت پاسخ ***
+    pub async fn list_recordings(&mut self, server_addr: String) -> Result<Vec<String>> {
+        let server_socket_addr = server_addr.parse()?;
+        let conn = self
+            .endpoint
+            .connect(server_socket_addr, "localhost")?
+            .await?;
+        info!("Connected to server to list recordings at {}", server_addr);
+
+        let (mut send, mut recv) = conn.open_bi().await?;
+
+        let request = ClientToServer {
+            payload: Some(ClientPayload::InitialRequest(InitialRequest {
+                request_type: Some(RequestType::ListRecordings(ListRecordingsRequest {})),
+            })),
+        };
+        send.write_all(&request.encode_to_vec()).await?;
+
+        // *** رفع خطا: استریم ارسال را به درستی به پایان می‌رسانیم ***
+        send.finish()?;
+
+        // منتظر می‌مانیم و تمام پاسخ سرور را می‌خوانیم
+        let response_bytes = recv.read_to_end(1024 * 10).await?;
+
+        // *** رفع خطا: دیگر اتصال را به صورت دستی نمی‌بندیم ***
+        // conn.close(0u32.into(), b"done");
+        // اجازه می‌دهیم اتصال با خارج شدن از اسکوپ به صورت طبیعی مدیریت شود.
+
+        let response = ServerToClient::decode(&response_bytes[..])?;
+
+        if let Some(ServerPayload::InitialResponse(initial_response)) = response.payload {
+            if let Some(ResponseType::ListRecordingsResponse(list_response)) =
+                initial_response.response_type
+            {
+                Ok(list_response.filenames)
+            } else {
+                bail!("Server sent an unexpected response type for list recordings request.")
+            }
+        } else {
+            bail!("Server sent an invalid response for list recordings.")
+        }
+    }
+
+    // ... (بقیه متدهای شما بدون تغییر باقی می‌مانند) ...
+
     pub async fn create_room(&mut self, server_addr: String, username: String) -> Result<String> {
         let server_socket_addr = server_addr.parse()?;
         let conn = self
@@ -149,42 +194,6 @@ impl ClientState {
         Ok(())
     }
 
-    pub async fn list_recordings(&mut self, server_addr: String) -> Result<Vec<String>> {
-        let server_socket_addr = server_addr.parse()?;
-        let conn = self
-            .endpoint
-            .connect(server_socket_addr, "localhost")?
-            .await?;
-        info!("Connected to server to list recordings at {}", server_addr);
-
-        let (mut send, mut recv) = conn.open_bi().await?;
-
-        let request = ClientToServer {
-            payload: Some(ClientPayload::InitialRequest(InitialRequest {
-                request_type: Some(RequestType::ListRecordings(ListRecordingsRequest {})),
-            })),
-        };
-        send.write_all(&request.encode_to_vec()).await?;
-        send.finish()?;
-
-        let response_bytes = recv.read_to_end(1024 * 10).await?;
-        conn.close(0u32.into(), b"done");
-
-        let response = ServerToClient::decode(&response_bytes[..])?;
-
-        if let Some(ServerPayload::InitialResponse(initial_response)) = response.payload {
-            if let Some(ResponseType::ListRecordingsResponse(list_response)) =
-                initial_response.response_type
-            {
-                Ok(list_response.filenames)
-            } else {
-                bail!("Server sent an unexpected response type for list recordings request.")
-            }
-        } else {
-            bail!("Server sent an invalid response for list recordings.")
-        }
-    }
-
     async fn start_event_listener(
         &self,
         connection: Connection,
@@ -203,7 +212,7 @@ impl ClientState {
                                         if let Some(ServerPayload::RoomEvent(event)) = msg.payload {
                                             let event_bytes = event.encode_to_vec();
                                             let message = EventMessage { data: event_bytes };
-                                            let locked_sink = sink.lock().await;
+                                            let mut locked_sink = sink.lock().await;
                                             if locked_sink.add(message).is_err() {
                                                 warn!("Failed to send event to Flutter: Sink is closed.");
                                             }

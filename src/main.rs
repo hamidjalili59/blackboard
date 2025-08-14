@@ -55,7 +55,10 @@ async fn main() -> Result<()> {
                     let remote_addr = connection.remote_address();
                     info!("Connection established with: {}", remote_addr);
                     if let Err(e) = handle_connection(connection, state_clone).await {
-                        error!("Connection handling failed for {}: {}", remote_addr, e);
+                        // از لاگ کردن خطای "Connection reset by peer" که طبیعی است، خودداری می‌کنیم
+                        if !e.to_string().contains("Connection reset by peer") {
+                            error!("Connection handling failed for {}: {}", remote_addr, e);
+                        }
                     }
                 }
                 Err(e) => {
@@ -90,7 +93,7 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
 
                 let logger = RoomLogger::new(&room_id)?;
                 let new_room = Room::new(room_id.clone(), client_id);
-                let mut log_receiver: broadcast::Receiver<RoomEvent> = new_room.broadcast_sender.subscribe();
+                let mut log_receiver = new_room.broadcast_sender.subscribe();
 
                 let logger_room_id = room_id.clone();
                 tokio::spawn(async move {
@@ -203,11 +206,9 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                 send_stream.write_all(&response.encode_to_vec()).await?;
                 
                 // *** رفع خطا: به جای بستن کل اتصال، فقط استریم را به درستی به پایان می‌رسانیم ***
-                // این کار به کلاینت اجازه می‌دهد تا تمام داده‌ها را دریافت کند.
                 send_stream.finish()?;
                 
                 // منتظر می‌مانیم تا کلاینت نیز سمت خود را ببندد و سپس خارج می‌شویم.
-                // خواندن تا انتها، منتظر می‌ماند تا کلاینت استریم ارسال خود را ببندد.
                 let _ = recv_stream.read_to_end(0).await;
                 
                 info!("Finished sending recording list to {}", remote_addr);
@@ -254,7 +255,25 @@ async fn handle_replay_request(connection: Connection, log_filename: String) -> 
         send_stream.finish()?;
     }
 
-    connection.close(0u32.into(), b"replay_finished");
+    // *** رفع خطا: ارسال یک پیام نهایی به جای بستن اتصال ***
+    // این پیام به کلاینت می‌گوید که بازپخش تمام شده است.
+    info!("Sending end-of-replay signal to client.");
+    let end_event = RoomEvent {
+        event_type: Some(EventType::HostEndedSession(HostEndedSession {
+            message: "Replay finished.".to_string(),
+        })),
+    };
+    let end_message = ServerToClient {
+        payload: Some(ServerPayload::RoomEvent(end_event)),
+    };
+    let mut final_stream = connection.open_uni().await?;
+    final_stream.write_all(&end_message.encode_to_vec()).await?;
+    final_stream.finish()?;
+
+    // *** رفع خطا: منتظر می‌مانیم تا کلاینت اتصال را ببندد ***
+    let reason = connection.closed().await;
+    info!("Connection for replay closed by peer with reason: {:?}", reason);
+
     Ok(())
 }
 

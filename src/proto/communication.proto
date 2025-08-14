@@ -134,21 +134,22 @@ message HostEndedSession {
 }
 
 message UserJoined {
-    string client_id = 1;
+    uint32 participant_id = 1; 
     string username = 2;
+    string client_id_uuid = 3;
 }
 
 message UserLeft {
-    string client_id = 1;
+    uint32 participant_id = 1;
     string username = 2;
 }
 
 message BroadcastedCanvasCommand {
-    string from_client_id = 1;
+    uint32 from_participant_id = 1;
     CanvasCommand command = 2;
 }
 
 message BroadcastedAudioChunk {
-    string from_client_id = 1;
+    uint32 from_participant_id = 1;
     AudioChunk chunk = 2;
 }

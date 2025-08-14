@@ -13,18 +13,18 @@ name = "server"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.98"
+anyhow = "1.0.99"
 bytes = "1.10.1"
 prost = "0.14.1"
 quinn = { version = "0.11.8", features = ["rustls"] }
-rcgen = "0.14.2"
-rustls = "0.23.29"
+rcgen = "0.14.3"
+rustls = "0.23.31"
 rustls-pki-types = "1.12.0"
-thiserror = "2.0.12"
-tokio = { version = "1.46.1", features = ["full", "macros"] }
+thiserror = "2.0.14"
+tokio = { version = "1.47.1", features = ["full", "macros"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
-uuid = { version = "1.10.0", features = ["v4"] }
+uuid = { version = "1.18.0", features = ["v4"] }
 rand = "0.9.2"
 chrono = { version = "0.4", features = ["serde"] }
 
