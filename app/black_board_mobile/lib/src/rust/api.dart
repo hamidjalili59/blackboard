@@ -18,7 +18,7 @@ Future<String> createRoom({
   username: username,
 );
 
-Future<void> joinRoom({
+Future<List<FlutterPathFull>> joinRoom({
   required String serverAddr,
   required String username,
   required String roomId,
@@ -42,32 +42,23 @@ Stream<EventMessage> replayRoom({
 Future<List<String>> listRecordings({required String serverAddr}) =>
     RustLib.instance.api.crateApiListRecordings(serverAddr: serverAddr);
 
-Future<void> startPath({
-  required String id,
-  required Point point,
+BigInt startPath({
+  required FlutterPoint point,
   required int color,
   required double strokeWidth,
 }) => RustLib.instance.api.crateApiStartPath(
-  id: id,
   point: point,
   color: color,
   strokeWidth: strokeWidth,
 );
 
-Future<void> appendToPath({required String id, required Point point}) =>
-    RustLib.instance.api.crateApiAppendToPath(id: id, point: point);
+Future<void> appendToPath({
+  required BigInt pathId,
+  required FlutterPoint point,
+}) => RustLib.instance.api.crateApiAppendToPath(pathId: pathId, point: point);
 
-Future<void> finishPath({
-  required String id,
-  required List<Point> points,
-  required int color,
-  required double strokeWidth,
-}) => RustLib.instance.api.crateApiFinishPath(
-  id: id,
-  points: points,
-  color: color,
-  strokeWidth: strokeWidth,
-);
+Future<void> endPath({required BigInt pathId}) =>
+    RustLib.instance.api.crateApiEndPath(pathId: pathId);
 
 Future<void> sendAudioChunk({
   required List<int> data,

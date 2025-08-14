@@ -31,13 +31,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
-  Point dco_decode_box_autoadd_point(dynamic raw);
+  FlutterPoint dco_decode_box_autoadd_flutter_point(dynamic raw);
 
   @protected
   EventMessage dco_decode_event_message(dynamic raw);
 
   @protected
-  double dco_decode_f_64(dynamic raw);
+  double dco_decode_f_32(dynamic raw);
+
+  @protected
+  FlutterPathFull dco_decode_flutter_path_full(dynamic raw);
+
+  @protected
+  FlutterPoint dco_decode_flutter_point(dynamic raw);
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
@@ -46,7 +52,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
-  List<Point> dco_decode_list_point(dynamic raw);
+  List<FlutterPathFull> dco_decode_list_flutter_path_full(dynamic raw);
+
+  @protected
+  List<FlutterPoint> dco_decode_list_flutter_point(dynamic raw);
 
   @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
@@ -55,10 +64,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
-  Point dco_decode_point(dynamic raw);
+  int dco_decode_u_32(dynamic raw);
 
   @protected
-  int dco_decode_u_32(dynamic raw);
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -78,13 +87,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
-  Point sse_decode_box_autoadd_point(SseDeserializer deserializer);
+  FlutterPoint sse_decode_box_autoadd_flutter_point(
+    SseDeserializer deserializer,
+  );
 
   @protected
   EventMessage sse_decode_event_message(SseDeserializer deserializer);
 
   @protected
-  double sse_decode_f_64(SseDeserializer deserializer);
+  double sse_decode_f_32(SseDeserializer deserializer);
+
+  @protected
+  FlutterPathFull sse_decode_flutter_path_full(SseDeserializer deserializer);
+
+  @protected
+  FlutterPoint sse_decode_flutter_point(SseDeserializer deserializer);
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
@@ -93,7 +110,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
-  List<Point> sse_decode_list_point(SseDeserializer deserializer);
+  List<FlutterPathFull> sse_decode_list_flutter_path_full(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<FlutterPoint> sse_decode_list_flutter_point(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
@@ -102,10 +126,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
-  Point sse_decode_point(SseDeserializer deserializer);
+  int sse_decode_u_32(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_u_32(SseDeserializer deserializer);
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -135,13 +159,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_point(Point self, SseSerializer serializer);
+  void sse_encode_box_autoadd_flutter_point(
+    FlutterPoint self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_event_message(EventMessage self, SseSerializer serializer);
 
   @protected
-  void sse_encode_f_64(double self, SseSerializer serializer);
+  void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_flutter_path_full(
+    FlutterPathFull self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_flutter_point(FlutterPoint self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
@@ -150,7 +186,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_point(List<Point> self, SseSerializer serializer);
+  void sse_encode_list_flutter_path_full(
+    List<FlutterPathFull> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_flutter_point(
+    List<FlutterPoint> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
@@ -162,10 +207,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_point(Point self, SseSerializer serializer);
+  void sse_encode_u_32(int self, SseSerializer serializer);
 
   @protected
-  void sse_encode_u_32(int self, SseSerializer serializer);
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);

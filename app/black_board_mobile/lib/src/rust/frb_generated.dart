@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -127408155;
+  int get rustContentHash => -463299397;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -78,7 +78,10 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  Future<void> crateApiAppendToPath({required String id, required Point point});
+  Future<void> crateApiAppendToPath({
+    required BigInt pathId,
+    required FlutterPoint point,
+  });
 
   Future<String> crateApiCreateRoom({
     required String serverAddr,
@@ -87,16 +90,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiDisconnect();
 
-  Future<void> crateApiFinishPath({
-    required String id,
-    required List<Point> points,
-    required int color,
-    required double strokeWidth,
-  });
+  Future<void> crateApiEndPath({required BigInt pathId});
 
   Future<void> crateApiInitApp();
 
-  Future<void> crateApiJoinRoom({
+  Future<List<FlutterPathFull>> crateApiJoinRoom({
     required String serverAddr,
     required String username,
     required String roomId,
@@ -116,9 +114,8 @@ abstract class RustLibApi extends BaseApi {
     required PlatformInt64 sequence,
   });
 
-  Future<void> crateApiStartPath({
-    required String id,
-    required Point point,
+  BigInt crateApiStartPath({
+    required FlutterPoint point,
     required int color,
     required double strokeWidth,
   });
@@ -134,15 +131,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<void> crateApiAppendToPath({
-    required String id,
-    required Point point,
+    required BigInt pathId,
+    required FlutterPoint point,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(id, serializer);
-          sse_encode_box_autoadd_point(point, serializer);
+          sse_encode_u_64(pathId, serializer);
+          sse_encode_box_autoadd_flutter_point(point, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -155,7 +152,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiAppendToPathConstMeta,
-        argValues: [id, point],
+        argValues: [pathId, point],
         apiImpl: this,
       ),
     );
@@ -163,7 +160,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiAppendToPathConstMeta => const TaskConstMeta(
     debugName: "append_to_path",
-    argNames: ["id", "point"],
+    argNames: ["pathId", "point"],
   );
 
   @override
@@ -228,20 +225,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "disconnect", argNames: []);
 
   @override
-  Future<void> crateApiFinishPath({
-    required String id,
-    required List<Point> points,
-    required int color,
-    required double strokeWidth,
-  }) {
+  Future<void> crateApiEndPath({required BigInt pathId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(id, serializer);
-          sse_encode_list_point(points, serializer);
-          sse_encode_u_32(color, serializer);
-          sse_encode_f_64(strokeWidth, serializer);
+          sse_encode_u_64(pathId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -253,17 +242,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiFinishPathConstMeta,
-        argValues: [id, points, color, strokeWidth],
+        constMeta: kCrateApiEndPathConstMeta,
+        argValues: [pathId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiFinishPathConstMeta => const TaskConstMeta(
-    debugName: "finish_path",
-    argNames: ["id", "points", "color", "strokeWidth"],
-  );
+  TaskConstMeta get kCrateApiEndPathConstMeta =>
+      const TaskConstMeta(debugName: "end_path", argNames: ["pathId"]);
 
   @override
   Future<void> crateApiInitApp() {
@@ -293,7 +280,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_app", argNames: []);
 
   @override
-  Future<void> crateApiJoinRoom({
+  Future<List<FlutterPathFull>> crateApiJoinRoom({
     required String serverAddr,
     required String username,
     required String roomId,
@@ -313,7 +300,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_list_flutter_path_full,
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiJoinRoomConstMeta,
@@ -464,33 +451,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<void> crateApiStartPath({
-    required String id,
-    required Point point,
+  BigInt crateApiStartPath({
+    required FlutterPoint point,
     required int color,
     required double strokeWidth,
   }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(id, serializer);
-          sse_encode_box_autoadd_point(point, serializer);
+          sse_encode_box_autoadd_flutter_point(point, serializer);
           sse_encode_u_32(color, serializer);
-          sse_encode_f_64(strokeWidth, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 11,
-            port: port_,
-          );
+          sse_encode_f_32(strokeWidth, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_u_64,
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiStartPathConstMeta,
-        argValues: [id, point, color, strokeWidth],
+        argValues: [point, color, strokeWidth],
         apiImpl: this,
       ),
     );
@@ -498,7 +478,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiStartPathConstMeta => const TaskConstMeta(
     debugName: "start_path",
-    argNames: ["id", "point", "color", "strokeWidth"],
+    argNames: ["point", "color", "strokeWidth"],
   );
 
   @protected
@@ -522,9 +502,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Point dco_decode_box_autoadd_point(dynamic raw) {
+  FlutterPoint dco_decode_box_autoadd_flutter_point(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_point(raw);
+    return dco_decode_flutter_point(raw);
   }
 
   @protected
@@ -537,9 +517,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  double dco_decode_f_64(dynamic raw) {
+  double dco_decode_f_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
+  }
+
+  @protected
+  FlutterPathFull dco_decode_flutter_path_full(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return FlutterPathFull(
+      pathId: dco_decode_u_64(arr[0]),
+      points: dco_decode_list_flutter_point(arr[1]),
+      color: dco_decode_u_32(arr[2]),
+      strokeWidth: dco_decode_f_32(arr[3]),
+    );
+  }
+
+  @protected
+  FlutterPoint dco_decode_flutter_point(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return FlutterPoint(
+      dx: dco_decode_f_32(arr[0]),
+      dy: dco_decode_f_32(arr[1]),
+    );
   }
 
   @protected
@@ -555,9 +561,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<Point> dco_decode_list_point(dynamic raw) {
+  List<FlutterPathFull> dco_decode_list_flutter_path_full(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_point).toList();
+    return (raw as List<dynamic>).map(dco_decode_flutter_path_full).toList();
+  }
+
+  @protected
+  List<FlutterPoint> dco_decode_list_flutter_point(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_flutter_point).toList();
   }
 
   @protected
@@ -573,18 +585,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Point dco_decode_point(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return Point(dx: dco_decode_f_64(arr[0]), dy: dco_decode_f_64(arr[1]));
-  }
-
-  @protected
   int dco_decode_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -622,9 +631,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Point sse_decode_box_autoadd_point(SseDeserializer deserializer) {
+  FlutterPoint sse_decode_box_autoadd_flutter_point(
+    SseDeserializer deserializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_point(deserializer));
+    return (sse_decode_flutter_point(deserializer));
   }
 
   @protected
@@ -635,9 +646,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  double sse_decode_f_64(SseDeserializer deserializer) {
+  double sse_decode_f_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getFloat64();
+    return deserializer.buffer.getFloat32();
+  }
+
+  @protected
+  FlutterPathFull sse_decode_flutter_path_full(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_pathId = sse_decode_u_64(deserializer);
+    var var_points = sse_decode_list_flutter_point(deserializer);
+    var var_color = sse_decode_u_32(deserializer);
+    var var_strokeWidth = sse_decode_f_32(deserializer);
+    return FlutterPathFull(
+      pathId: var_pathId,
+      points: var_points,
+      color: var_color,
+      strokeWidth: var_strokeWidth,
+    );
+  }
+
+  @protected
+  FlutterPoint sse_decode_flutter_point(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_dx = sse_decode_f_32(deserializer);
+    var var_dy = sse_decode_f_32(deserializer);
+    return FlutterPoint(dx: var_dx, dy: var_dy);
   }
 
   @protected
@@ -659,13 +693,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<Point> sse_decode_list_point(SseDeserializer deserializer) {
+  List<FlutterPathFull> sse_decode_list_flutter_path_full(
+    SseDeserializer deserializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <Point>[];
+    var ans_ = <FlutterPathFull>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_point(deserializer));
+      ans_.add(sse_decode_flutter_path_full(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<FlutterPoint> sse_decode_list_flutter_point(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <FlutterPoint>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_flutter_point(deserializer));
     }
     return ans_;
   }
@@ -685,17 +735,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Point sse_decode_point(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_dx = sse_decode_f_64(deserializer);
-    var var_dy = sse_decode_f_64(deserializer);
-    return Point(dx: var_dx, dy: var_dy);
-  }
-
-  @protected
   int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint32();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
@@ -754,9 +802,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_point(Point self, SseSerializer serializer) {
+  void sse_encode_box_autoadd_flutter_point(
+    FlutterPoint self,
+    SseSerializer serializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_point(self, serializer);
+    sse_encode_flutter_point(self, serializer);
   }
 
   @protected
@@ -766,9 +817,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_f_64(double self, SseSerializer serializer) {
+  void sse_encode_f_32(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putFloat64(self);
+    serializer.buffer.putFloat32(self);
+  }
+
+  @protected
+  void sse_encode_flutter_path_full(
+    FlutterPathFull self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.pathId, serializer);
+    sse_encode_list_flutter_point(self.points, serializer);
+    sse_encode_u_32(self.color, serializer);
+    sse_encode_f_32(self.strokeWidth, serializer);
+  }
+
+  @protected
+  void sse_encode_flutter_point(FlutterPoint self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_32(self.dx, serializer);
+    sse_encode_f_32(self.dy, serializer);
   }
 
   @protected
@@ -787,11 +857,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_point(List<Point> self, SseSerializer serializer) {
+  void sse_encode_list_flutter_path_full(
+    List<FlutterPathFull> self,
+    SseSerializer serializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_point(item, serializer);
+      sse_encode_flutter_path_full(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_flutter_point(
+    List<FlutterPoint> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_flutter_point(item, serializer);
     }
   }
 
@@ -818,16 +903,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_point(Point self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_f_64(self.dx, serializer);
-    sse_encode_f_64(self.dy, serializer);
-  }
-
-  @protected
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
   }
 
   @protected

@@ -45,27 +45,31 @@ message RoomMessage {
 }
 
 message Point {
-    double dx = 1;
-    double dy = 2;
+    float dx = 1;
+    float dy = 2;
 }
 
 message PathStart {
-    string id = 1;
+    uint64 path_id = 1;
     Point point = 2;
     uint32 color = 3;
-    double stroke_width = 4;
+    float stroke_width = 4;
 }
 
 message PathAppend {
-    string id = 1;
+    uint64 path_id = 1;
     Point point = 2;
 }
 
+message PathEnd {
+    uint64 path_id = 1;
+}
+
 message PathFull {
-    string id = 1;
+    uint64 path_id = 1;
     repeated Point points = 2;
     uint32 color = 3;
-    double stroke_width = 4;
+    float stroke_width = 4;
 }
 
 message CanvasCommand {
@@ -73,7 +77,7 @@ message CanvasCommand {
   oneof command_type {
     PathStart path_start = 2;
     PathAppend path_append = 3;
-    PathFull path_full = 4;
+    PathEnd path_end = 4; // PathFull حذف و PathEnd اضافه شد
   }
 }
 
@@ -107,12 +111,20 @@ message ListRecordingsResponse {
     repeated string filenames = 1;
 }
 
+// برای سادگی کلاینت، سرور participant_id را مستقیم ارسال می‌کند
 message CreateRoomResponse {
     string room_id = 1;
+    uint32 participant_id = 2;
+}
+
+message CanvasSnapshot {
+    repeated PathFull paths = 1;
 }
 
 message JoinRoomResponse {
     string message = 1;
+    uint32 participant_id = 2;
+    optional CanvasSnapshot initial_canvas_state = 3;
 }
 
 message ErrorResponse {
@@ -126,6 +138,7 @@ message RoomEvent {
         BroadcastedCanvasCommand canvas_command = 3;
         BroadcastedAudioChunk audio_chunk = 4;
         HostEndedSession host_ended_session = 5;
+        CanvasSnapshot canvas_snapshot = 6;
     }
 }
 
@@ -134,21 +147,22 @@ message HostEndedSession {
 }
 
 message UserJoined {
-    string client_id = 1;
+    uint32 participant_id = 1;
     string username = 2;
+    string client_id_uuid = 3; // برای لاگ کردن یا دیباگ
 }
 
 message UserLeft {
-    string client_id = 1;
+    uint32 participant_id = 1;
     string username = 2;
 }
 
 message BroadcastedCanvasCommand {
-    string from_client_id = 1;
+    uint32 from_participant_id = 1;
     CanvasCommand command = 2;
 }
 
 message BroadcastedAudioChunk {
-    string from_client_id = 1;
+    uint32 from_participant_id = 1;
     AudioChunk chunk = 2;
 }

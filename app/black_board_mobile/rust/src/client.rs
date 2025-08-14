@@ -1,14 +1,10 @@
-use crate::bridge_models::EventMessage;
+use crate::bridge_models::{EventMessage, FlutterPathFull, FlutterPoint};
 use crate::frb_generated::StreamSink;
 use crate::proto::{
-    client_to_server::Payload as ClientPayload,
-    initial_request::RequestType,
-    initial_response::ResponseType,
-    ListRecordingsRequest,
-    room_message::Payload as RoomMessagePayload,
-    server_to_client::Payload as ServerPayload,
-    ClientToServer, CreateRoomRequest, InitialRequest, JoinRoomRequest, ReplayRoomRequest,
-    RoomMessage, ServerToClient,
+    client_to_server::Payload as ClientPayload, initial_request::RequestType,
+    initial_response::ResponseType, room_message::Payload as RoomMessagePayload,
+    server_to_client::Payload as ServerPayload, ClientToServer, CreateRoomRequest, InitialRequest,
+    JoinRoomRequest, ListRecordingsRequest, ReplayRoomRequest, RoomMessage, ServerToClient,
 };
 use anyhow::{anyhow, bail, Result};
 use prost::Message;
@@ -22,6 +18,8 @@ use tracing::{error, info, warn};
 pub struct ClientState {
     connection: Option<Connection>,
     endpoint: Endpoint,
+    participant_id: Option<u32>,
+    path_counter: u64,
 }
 
 impl ClientState {
@@ -32,37 +30,34 @@ impl ClientState {
         Ok(Self {
             connection: None,
             endpoint,
+            participant_id: None,
+            path_counter: 0,
         })
     }
 
-    // *** متد جدید برای ارسال درخواست لیست و دریافت پاسخ ***
+    pub fn generate_path_id(&mut self) -> Result<u64> {
+        let participant_id = self
+            .participant_id
+            .ok_or_else(|| anyhow!("Cannot generate path_id without a participant_id"))?;
+        self.path_counter += 1;
+        Ok((participant_id as u64) << 32 | self.path_counter)
+    }
+
     pub async fn list_recordings(&mut self, server_addr: String) -> Result<Vec<String>> {
         let server_socket_addr = server_addr.parse()?;
         let conn = self
             .endpoint
             .connect(server_socket_addr, "localhost")?
             .await?;
-        info!("Connected to server to list recordings at {}", server_addr);
-
         let (mut send, mut recv) = conn.open_bi().await?;
-
         let request = ClientToServer {
             payload: Some(ClientPayload::InitialRequest(InitialRequest {
                 request_type: Some(RequestType::ListRecordings(ListRecordingsRequest {})),
             })),
         };
         send.write_all(&request.encode_to_vec()).await?;
-
-        // *** رفع خطا: استریم ارسال را به درستی به پایان می‌رسانیم ***
         send.finish()?;
-
-        // منتظر می‌مانیم و تمام پاسخ سرور را می‌خوانیم
         let response_bytes = recv.read_to_end(1024 * 10).await?;
-
-        // *** رفع خطا: دیگر اتصال را به صورت دستی نمی‌بندیم ***
-        // conn.close(0u32.into(), b"done");
-        // اجازه می‌دهیم اتصال با خارج شدن از اسکوپ به صورت طبیعی مدیریت شود.
-
         let response = ServerToClient::decode(&response_bytes[..])?;
 
         if let Some(ServerPayload::InitialResponse(initial_response)) = response.payload {
@@ -71,14 +66,12 @@ impl ClientState {
             {
                 Ok(list_response.filenames)
             } else {
-                bail!("Server sent an unexpected response type for list recordings request.")
+                bail!("Unexpected response type for list recordings.")
             }
         } else {
-            bail!("Server sent an invalid response for list recordings.")
+            bail!("Invalid response for list recordings.")
         }
     }
-
-    // ... (بقیه متدهای شما بدون تغییر باقی می‌مانند) ...
 
     pub async fn create_room(&mut self, server_addr: String, username: String) -> Result<String> {
         let server_socket_addr = server_addr.parse()?;
@@ -86,10 +79,7 @@ impl ClientState {
             .endpoint
             .connect(server_socket_addr, "localhost")?
             .await?;
-        info!("Connected to server at {}", server_addr);
-
         let (mut send, mut recv) = conn.open_bi().await?;
-
         let request = ClientToServer {
             payload: Some(ClientPayload::InitialRequest(InitialRequest {
                 request_type: Some(RequestType::CreateRoom(CreateRoomRequest { username })),
@@ -97,7 +87,6 @@ impl ClientState {
         };
         send.write_all(&request.encode_to_vec()).await?;
         send.finish()?;
-
         let response_bytes = recv.read_to_end(1024).await?;
         let response = ServerToClient::decode(&response_bytes[..])?;
 
@@ -106,62 +95,94 @@ impl ClientState {
                 initial_response.response_type
             {
                 let room_id = create_response.room_id;
-                info!("Successfully created room with ID: {}", room_id);
                 self.connection = Some(conn);
+                self.participant_id = Some(create_response.participant_id);
                 Ok(room_id)
             } else {
-                bail!("Server sent an unexpected response type after create room request.")
+                bail!("Unexpected response type for create room.")
             }
         } else {
-            bail!("Server sent an invalid initial response.")
+            bail!("Invalid response for create room.")
         }
     }
 
-    pub async fn join_room(&mut self, server_addr: String, username: String, room_id: String) -> Result<()> {
+    // CHANGED: دیگر sink نمی‌گیرد
+    pub async fn join_room(
+        &mut self,
+        server_addr: String,
+        username: String,
+        room_id: String,
+    ) -> Result<Vec<FlutterPathFull>> {
+        // CHANGED: خروجی تغییر کرد
         let server_socket_addr = server_addr.parse()?;
         let conn = self
             .endpoint
             .connect(server_socket_addr, "localhost")?
             .await?;
-        info!("Connected to server at {}", server_addr);
-
         let (mut send, mut recv) = conn.open_bi().await?;
-
         let request = ClientToServer {
             payload: Some(ClientPayload::InitialRequest(InitialRequest {
-                request_type: Some(RequestType::JoinRoom(JoinRoomRequest {
-                    username,
-                    room_id,
-                })),
+                request_type: Some(RequestType::JoinRoom(JoinRoomRequest { username, room_id })),
             })),
         };
         send.write_all(&request.encode_to_vec()).await?;
         send.finish()?;
-
-        let response_bytes = recv.read_to_end(1024).await?;
+        let response_bytes = recv.read_to_end(1024 * 1024).await?;
         let response = ServerToClient::decode(&response_bytes[..])?;
 
         if let Some(ServerPayload::InitialResponse(initial_response)) = response.payload {
-            if let Some(ResponseType::JoinRoomResponse(_)) = initial_response.response_type {
-                info!("Successfully joined room.");
+            if let Some(ResponseType::JoinRoomResponse(join_response)) =
+                initial_response.response_type
+            {
                 self.connection = Some(conn);
-                Ok(())
+                self.participant_id = Some(join_response.participant_id);
+
+                // CHANGED: پردازش snapshot و تبدیل آن به خروجی تابع
+                let initial_paths = if let Some(snapshot) = join_response.initial_canvas_state {
+                    snapshot
+                        .paths
+                        .into_iter()
+                        .map(|p| FlutterPathFull {
+                            path_id: p.path_id,
+                            points: p
+                                .points
+                                .into_iter()
+                                .map(|pt| FlutterPoint {
+                                    dx: pt.dx,
+                                    dy: pt.dy,
+                                })
+                                .collect(),
+                            color: p.color,
+                            stroke_width: p.stroke_width,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+
+                Ok(initial_paths)
             } else if let Some(ResponseType::ErrorResponse(err)) = initial_response.response_type {
                 bail!("Failed to join room: {}", err.message)
             } else {
-                bail!("Server sent an unexpected response type after join room request.")
+                bail!("Unexpected response type for join room.")
             }
         } else {
-            bail!("Server sent an invalid initial response.")
+            bail!("Invalid response for join room.")
         }
     }
 
-    pub async fn listen_events(&self, events_sink: Arc<Mutex<StreamSink<EventMessage>>>) -> Result<()> {
+    // NEW: این تابع دوباره فعال شد
+    pub async fn listen_events(
+        &self,
+        events_sink: Arc<Mutex<StreamSink<EventMessage>>>,
+    ) -> Result<()> {
         if let Some(conn) = &self.connection {
             self.start_event_listener(conn.clone(), events_sink).await;
             Ok(())
         } else {
-            Err(anyhow!("Not connected to a room. Cannot listen for events."))
+            Err(anyhow!(
+                "Not connected to a room. Cannot listen for events."
+            ))
         }
     }
 
@@ -182,9 +203,7 @@ impl ClientState {
 
         let request = ClientToServer {
             payload: Some(ClientPayload::InitialRequest(InitialRequest {
-                request_type: Some(RequestType::ReplayRoom(ReplayRoomRequest {
-                    log_filename,
-                })),
+                request_type: Some(RequestType::ReplayRoom(ReplayRoomRequest { log_filename })),
             })),
         };
         send.write_all(&request.encode_to_vec()).await?;
@@ -212,7 +231,7 @@ impl ClientState {
                                         if let Some(ServerPayload::RoomEvent(event)) = msg.payload {
                                             let event_bytes = event.encode_to_vec();
                                             let message = EventMessage { data: event_bytes };
-                                            let mut locked_sink = sink.lock().await;
+                                            let locked_sink = sink.lock().await;
                                             if locked_sink.add(message).is_err() {
                                                 warn!("Failed to send event to Flutter: Sink is closed.");
                                             }
@@ -257,7 +276,7 @@ impl ClientState {
 }
 
 #[derive(Debug)]
-struct SkipServerVerification;
+struct SkipServerVerification {}
 
 impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
     fn verify_server_cert(
@@ -296,7 +315,7 @@ impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
 fn configure_client() -> Result<ClientConfig> {
     let crypto = rustls::ClientConfig::builder()
         .dangerous()
-        .with_custom_certificate_verifier(Arc::new(SkipServerVerification))
+        .with_custom_certificate_verifier(Arc::new(SkipServerVerification {}))
         .with_no_client_auth();
 
     let quic_crypto = QuicClientConfig::try_from(crypto)?;

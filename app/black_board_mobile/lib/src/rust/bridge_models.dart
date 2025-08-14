@@ -22,11 +22,39 @@ class EventMessage {
           data == other.data;
 }
 
-class Point {
+class FlutterPathFull {
+  final BigInt pathId;
+  final List<FlutterPoint> points;
+  final int color;
+  final double strokeWidth;
+
+  const FlutterPathFull({
+    required this.pathId,
+    required this.points,
+    required this.color,
+    required this.strokeWidth,
+  });
+
+  @override
+  int get hashCode =>
+      pathId.hashCode ^ points.hashCode ^ color.hashCode ^ strokeWidth.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlutterPathFull &&
+          runtimeType == other.runtimeType &&
+          pathId == other.pathId &&
+          points == other.points &&
+          color == other.color &&
+          strokeWidth == other.strokeWidth;
+}
+
+class FlutterPoint {
   final double dx;
   final double dy;
 
-  const Point({required this.dx, required this.dy});
+  const FlutterPoint({required this.dx, required this.dy});
 
   @override
   int get hashCode => dx.hashCode ^ dy.hashCode;
@@ -34,7 +62,7 @@ class Point {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Point &&
+      other is FlutterPoint &&
           runtimeType == other.runtimeType &&
           dx == other.dx &&
           dy == other.dy;

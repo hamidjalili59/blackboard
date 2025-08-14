@@ -217,7 +217,6 @@ class InitialRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(3)
   ReplayRoomRequest ensureReplayRoom() => $_ensure(2);
 
-  /// *** درخواست جدید برای گرفتن لیست جلسات ضبط شده ***
   @$pb.TagNumber(4)
   ListRecordingsRequest get listRecordings => $_getN(3);
   @$pb.TagNumber(4)
@@ -230,7 +229,6 @@ class InitialRequest extends $pb.GeneratedMessage {
   ListRecordingsRequest ensureListRecordings() => $_ensure(3);
 }
 
-/// *** پیام جدید برای درخواست لیست ***
 class ListRecordingsRequest extends $pb.GeneratedMessage {
   factory ListRecordingsRequest() => create();
 
@@ -563,8 +561,8 @@ class Point extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'Point',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..a<$core.double>(1, _omitFieldNames ? '' : 'dx', $pb.PbFieldType.OD)
-    ..a<$core.double>(2, _omitFieldNames ? '' : 'dy', $pb.PbFieldType.OD)
+    ..a<$core.double>(1, _omitFieldNames ? '' : 'dx', $pb.PbFieldType.OF)
+    ..a<$core.double>(2, _omitFieldNames ? '' : 'dy', $pb.PbFieldType.OF)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -589,7 +587,7 @@ class Point extends $pb.GeneratedMessage {
   @$pb.TagNumber(1)
   $core.double get dx => $_getN(0);
   @$pb.TagNumber(1)
-  set dx($core.double value) => $_setDouble(0, value);
+  set dx($core.double value) => $_setFloat(0, value);
   @$pb.TagNumber(1)
   $core.bool hasDx() => $_has(0);
   @$pb.TagNumber(1)
@@ -598,7 +596,7 @@ class Point extends $pb.GeneratedMessage {
   @$pb.TagNumber(2)
   $core.double get dy => $_getN(1);
   @$pb.TagNumber(2)
-  set dy($core.double value) => $_setDouble(1, value);
+  set dy($core.double value) => $_setFloat(1, value);
   @$pb.TagNumber(2)
   $core.bool hasDy() => $_has(1);
   @$pb.TagNumber(2)
@@ -607,13 +605,13 @@ class Point extends $pb.GeneratedMessage {
 
 class PathStart extends $pb.GeneratedMessage {
   factory PathStart({
-    $core.String? id,
+    $fixnum.Int64? pathId,
     Point? point,
     $core.int? color,
     $core.double? strokeWidth,
   }) {
     final result = create();
-    if (id != null) result.id = id;
+    if (pathId != null) result.pathId = pathId;
     if (point != null) result.point = point;
     if (color != null) result.color = color;
     if (strokeWidth != null) result.strokeWidth = strokeWidth;
@@ -633,11 +631,12 @@ class PathStart extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'PathStart',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..a<$fixnum.Int64>(1, _omitFieldNames ? '' : 'pathId', $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
     ..aOM<Point>(2, _omitFieldNames ? '' : 'point', subBuilder: Point.create)
     ..a<$core.int>(3, _omitFieldNames ? '' : 'color', $pb.PbFieldType.OU3)
     ..a<$core.double>(
-        4, _omitFieldNames ? '' : 'strokeWidth', $pb.PbFieldType.OD)
+        4, _omitFieldNames ? '' : 'strokeWidth', $pb.PbFieldType.OF)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -660,13 +659,13 @@ class PathStart extends $pb.GeneratedMessage {
   static PathStart? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $core.String get id => $_getSZ(0);
+  $fixnum.Int64 get pathId => $_getI64(0);
   @$pb.TagNumber(1)
-  set id($core.String value) => $_setString(0, value);
+  set pathId($fixnum.Int64 value) => $_setInt64(0, value);
   @$pb.TagNumber(1)
-  $core.bool hasId() => $_has(0);
+  $core.bool hasPathId() => $_has(0);
   @$pb.TagNumber(1)
-  void clearId() => $_clearField(1);
+  void clearPathId() => $_clearField(1);
 
   @$pb.TagNumber(2)
   Point get point => $_getN(1);
@@ -691,7 +690,7 @@ class PathStart extends $pb.GeneratedMessage {
   @$pb.TagNumber(4)
   $core.double get strokeWidth => $_getN(3);
   @$pb.TagNumber(4)
-  set strokeWidth($core.double value) => $_setDouble(3, value);
+  set strokeWidth($core.double value) => $_setFloat(3, value);
   @$pb.TagNumber(4)
   $core.bool hasStrokeWidth() => $_has(3);
   @$pb.TagNumber(4)
@@ -700,11 +699,11 @@ class PathStart extends $pb.GeneratedMessage {
 
 class PathAppend extends $pb.GeneratedMessage {
   factory PathAppend({
-    $core.String? id,
+    $fixnum.Int64? pathId,
     Point? point,
   }) {
     final result = create();
-    if (id != null) result.id = id;
+    if (pathId != null) result.pathId = pathId;
     if (point != null) result.point = point;
     return result;
   }
@@ -722,7 +721,8 @@ class PathAppend extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'PathAppend',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..a<$fixnum.Int64>(1, _omitFieldNames ? '' : 'pathId', $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
     ..aOM<Point>(2, _omitFieldNames ? '' : 'point', subBuilder: Point.create)
     ..hasRequiredFields = false;
 
@@ -746,13 +746,13 @@ class PathAppend extends $pb.GeneratedMessage {
   static PathAppend? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $core.String get id => $_getSZ(0);
+  $fixnum.Int64 get pathId => $_getI64(0);
   @$pb.TagNumber(1)
-  set id($core.String value) => $_setString(0, value);
+  set pathId($fixnum.Int64 value) => $_setInt64(0, value);
   @$pb.TagNumber(1)
-  $core.bool hasId() => $_has(0);
+  $core.bool hasPathId() => $_has(0);
   @$pb.TagNumber(1)
-  void clearId() => $_clearField(1);
+  void clearPathId() => $_clearField(1);
 
   @$pb.TagNumber(2)
   Point get point => $_getN(1);
@@ -766,15 +766,70 @@ class PathAppend extends $pb.GeneratedMessage {
   Point ensurePoint() => $_ensure(1);
 }
 
+class PathEnd extends $pb.GeneratedMessage {
+  factory PathEnd({
+    $fixnum.Int64? pathId,
+  }) {
+    final result = create();
+    if (pathId != null) result.pathId = pathId;
+    return result;
+  }
+
+  PathEnd._();
+
+  factory PathEnd.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PathEnd.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PathEnd',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
+      createEmptyInstance: create)
+    ..a<$fixnum.Int64>(1, _omitFieldNames ? '' : 'pathId', $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PathEnd clone() => PathEnd()..mergeFromMessage(this);
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PathEnd copyWith(void Function(PathEnd) updates) =>
+      super.copyWith((message) => updates(message as PathEnd)) as PathEnd;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PathEnd create() => PathEnd._();
+  @$core.override
+  PathEnd createEmptyInstance() => create();
+  static $pb.PbList<PathEnd> createRepeated() => $pb.PbList<PathEnd>();
+  @$core.pragma('dart2js:noInline')
+  static PathEnd getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<PathEnd>(create);
+  static PathEnd? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get pathId => $_getI64(0);
+  @$pb.TagNumber(1)
+  set pathId($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPathId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPathId() => $_clearField(1);
+}
+
 class PathFull extends $pb.GeneratedMessage {
   factory PathFull({
-    $core.String? id,
+    $fixnum.Int64? pathId,
     $core.Iterable<Point>? points,
     $core.int? color,
     $core.double? strokeWidth,
   }) {
     final result = create();
-    if (id != null) result.id = id;
+    if (pathId != null) result.pathId = pathId;
     if (points != null) result.points.addAll(points);
     if (color != null) result.color = color;
     if (strokeWidth != null) result.strokeWidth = strokeWidth;
@@ -794,12 +849,13 @@ class PathFull extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'PathFull',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..a<$fixnum.Int64>(1, _omitFieldNames ? '' : 'pathId', $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
     ..pc<Point>(2, _omitFieldNames ? '' : 'points', $pb.PbFieldType.PM,
         subBuilder: Point.create)
     ..a<$core.int>(3, _omitFieldNames ? '' : 'color', $pb.PbFieldType.OU3)
     ..a<$core.double>(
-        4, _omitFieldNames ? '' : 'strokeWidth', $pb.PbFieldType.OD)
+        4, _omitFieldNames ? '' : 'strokeWidth', $pb.PbFieldType.OF)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -822,13 +878,13 @@ class PathFull extends $pb.GeneratedMessage {
   static PathFull? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $core.String get id => $_getSZ(0);
+  $fixnum.Int64 get pathId => $_getI64(0);
   @$pb.TagNumber(1)
-  set id($core.String value) => $_setString(0, value);
+  set pathId($fixnum.Int64 value) => $_setInt64(0, value);
   @$pb.TagNumber(1)
-  $core.bool hasId() => $_has(0);
+  $core.bool hasPathId() => $_has(0);
   @$pb.TagNumber(1)
-  void clearId() => $_clearField(1);
+  void clearPathId() => $_clearField(1);
 
   @$pb.TagNumber(2)
   $pb.PbList<Point> get points => $_getList(1);
@@ -845,27 +901,27 @@ class PathFull extends $pb.GeneratedMessage {
   @$pb.TagNumber(4)
   $core.double get strokeWidth => $_getN(3);
   @$pb.TagNumber(4)
-  set strokeWidth($core.double value) => $_setDouble(3, value);
+  set strokeWidth($core.double value) => $_setFloat(3, value);
   @$pb.TagNumber(4)
   $core.bool hasStrokeWidth() => $_has(3);
   @$pb.TagNumber(4)
   void clearStrokeWidth() => $_clearField(4);
 }
 
-enum CanvasCommand_CommandType { pathStart, pathAppend, pathFull, notSet }
+enum CanvasCommand_CommandType { pathStart, pathAppend, pathEnd, notSet }
 
 class CanvasCommand extends $pb.GeneratedMessage {
   factory CanvasCommand({
     $fixnum.Int64? timestampMs,
     PathStart? pathStart,
     PathAppend? pathAppend,
-    PathFull? pathFull,
+    PathEnd? pathEnd,
   }) {
     final result = create();
     if (timestampMs != null) result.timestampMs = timestampMs;
     if (pathStart != null) result.pathStart = pathStart;
     if (pathAppend != null) result.pathAppend = pathAppend;
-    if (pathFull != null) result.pathFull = pathFull;
+    if (pathEnd != null) result.pathEnd = pathEnd;
     return result;
   }
 
@@ -882,7 +938,7 @@ class CanvasCommand extends $pb.GeneratedMessage {
       _CanvasCommand_CommandTypeByTag = {
     2: CanvasCommand_CommandType.pathStart,
     3: CanvasCommand_CommandType.pathAppend,
-    4: CanvasCommand_CommandType.pathFull,
+    4: CanvasCommand_CommandType.pathEnd,
     0: CanvasCommand_CommandType.notSet
   };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
@@ -895,8 +951,8 @@ class CanvasCommand extends $pb.GeneratedMessage {
         subBuilder: PathStart.create)
     ..aOM<PathAppend>(3, _omitFieldNames ? '' : 'pathAppend',
         subBuilder: PathAppend.create)
-    ..aOM<PathFull>(4, _omitFieldNames ? '' : 'pathFull',
-        subBuilder: PathFull.create)
+    ..aOM<PathEnd>(4, _omitFieldNames ? '' : 'pathEnd',
+        subBuilder: PathEnd.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -956,15 +1012,15 @@ class CanvasCommand extends $pb.GeneratedMessage {
   PathAppend ensurePathAppend() => $_ensure(2);
 
   @$pb.TagNumber(4)
-  PathFull get pathFull => $_getN(3);
+  PathEnd get pathEnd => $_getN(3);
   @$pb.TagNumber(4)
-  set pathFull(PathFull value) => $_setField(4, value);
+  set pathEnd(PathEnd value) => $_setField(4, value);
   @$pb.TagNumber(4)
-  $core.bool hasPathFull() => $_has(3);
+  $core.bool hasPathEnd() => $_has(3);
   @$pb.TagNumber(4)
-  void clearPathFull() => $_clearField(4);
+  void clearPathEnd() => $_clearField(4);
   @$pb.TagNumber(4)
-  PathFull ensurePathFull() => $_ensure(3);
+  PathEnd ensurePathEnd() => $_ensure(3);
 }
 
 class AudioChunk extends $pb.GeneratedMessage {
@@ -1237,7 +1293,6 @@ class InitialResponse extends $pb.GeneratedMessage {
   @$pb.TagNumber(3)
   ErrorResponse ensureErrorResponse() => $_ensure(2);
 
-  /// *** پاسخ جدید شامل لیست نام فایل‌ها ***
   @$pb.TagNumber(4)
   ListRecordingsResponse get listRecordingsResponse => $_getN(3);
   @$pb.TagNumber(4)
@@ -1251,7 +1306,6 @@ class InitialResponse extends $pb.GeneratedMessage {
   ListRecordingsResponse ensureListRecordingsResponse() => $_ensure(3);
 }
 
-/// *** پیام جدید برای پاسخ لیست ***
 class ListRecordingsResponse extends $pb.GeneratedMessage {
   factory ListRecordingsResponse({
     $core.Iterable<$core.String>? filenames,
@@ -1304,12 +1358,15 @@ class ListRecordingsResponse extends $pb.GeneratedMessage {
   $pb.PbList<$core.String> get filenames => $_getList(0);
 }
 
+/// برای سادگی کلاینت، سرور participant_id را مستقیم ارسال می‌کند
 class CreateRoomResponse extends $pb.GeneratedMessage {
   factory CreateRoomResponse({
     $core.String? roomId,
+    $core.int? participantId,
   }) {
     final result = create();
     if (roomId != null) result.roomId = roomId;
+    if (participantId != null) result.participantId = participantId;
     return result;
   }
 
@@ -1327,6 +1384,8 @@ class CreateRoomResponse extends $pb.GeneratedMessage {
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'roomId')
+    ..a<$core.int>(
+        2, _omitFieldNames ? '' : 'participantId', $pb.PbFieldType.OU3)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1358,14 +1417,79 @@ class CreateRoomResponse extends $pb.GeneratedMessage {
   $core.bool hasRoomId() => $_has(0);
   @$pb.TagNumber(1)
   void clearRoomId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get participantId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set participantId($core.int value) => $_setUnsignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasParticipantId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearParticipantId() => $_clearField(2);
+}
+
+class CanvasSnapshot extends $pb.GeneratedMessage {
+  factory CanvasSnapshot({
+    $core.Iterable<PathFull>? paths,
+  }) {
+    final result = create();
+    if (paths != null) result.paths.addAll(paths);
+    return result;
+  }
+
+  CanvasSnapshot._();
+
+  factory CanvasSnapshot.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CanvasSnapshot.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CanvasSnapshot',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
+      createEmptyInstance: create)
+    ..pc<PathFull>(1, _omitFieldNames ? '' : 'paths', $pb.PbFieldType.PM,
+        subBuilder: PathFull.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CanvasSnapshot clone() => CanvasSnapshot()..mergeFromMessage(this);
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CanvasSnapshot copyWith(void Function(CanvasSnapshot) updates) =>
+      super.copyWith((message) => updates(message as CanvasSnapshot))
+          as CanvasSnapshot;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CanvasSnapshot create() => CanvasSnapshot._();
+  @$core.override
+  CanvasSnapshot createEmptyInstance() => create();
+  static $pb.PbList<CanvasSnapshot> createRepeated() =>
+      $pb.PbList<CanvasSnapshot>();
+  @$core.pragma('dart2js:noInline')
+  static CanvasSnapshot getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CanvasSnapshot>(create);
+  static CanvasSnapshot? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<PathFull> get paths => $_getList(0);
 }
 
 class JoinRoomResponse extends $pb.GeneratedMessage {
   factory JoinRoomResponse({
     $core.String? message,
+    $core.int? participantId,
+    CanvasSnapshot? initialCanvasState,
   }) {
     final result = create();
     if (message != null) result.message = message;
+    if (participantId != null) result.participantId = participantId;
+    if (initialCanvasState != null)
+      result.initialCanvasState = initialCanvasState;
     return result;
   }
 
@@ -1383,6 +1507,10 @@ class JoinRoomResponse extends $pb.GeneratedMessage {
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'message')
+    ..a<$core.int>(
+        2, _omitFieldNames ? '' : 'participantId', $pb.PbFieldType.OU3)
+    ..aOM<CanvasSnapshot>(3, _omitFieldNames ? '' : 'initialCanvasState',
+        subBuilder: CanvasSnapshot.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1414,6 +1542,26 @@ class JoinRoomResponse extends $pb.GeneratedMessage {
   $core.bool hasMessage() => $_has(0);
   @$pb.TagNumber(1)
   void clearMessage() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get participantId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set participantId($core.int value) => $_setUnsignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasParticipantId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearParticipantId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  CanvasSnapshot get initialCanvasState => $_getN(2);
+  @$pb.TagNumber(3)
+  set initialCanvasState(CanvasSnapshot value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasInitialCanvasState() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearInitialCanvasState() => $_clearField(3);
+  @$pb.TagNumber(3)
+  CanvasSnapshot ensureInitialCanvasState() => $_ensure(2);
 }
 
 class ErrorResponse extends $pb.GeneratedMessage {
@@ -1478,6 +1626,7 @@ enum RoomEvent_EventType {
   canvasCommand,
   audioChunk,
   hostEndedSession,
+  canvasSnapshot,
   notSet
 }
 
@@ -1488,6 +1637,7 @@ class RoomEvent extends $pb.GeneratedMessage {
     BroadcastedCanvasCommand? canvasCommand,
     BroadcastedAudioChunk? audioChunk,
     HostEndedSession? hostEndedSession,
+    CanvasSnapshot? canvasSnapshot,
   }) {
     final result = create();
     if (userJoined != null) result.userJoined = userJoined;
@@ -1495,6 +1645,7 @@ class RoomEvent extends $pb.GeneratedMessage {
     if (canvasCommand != null) result.canvasCommand = canvasCommand;
     if (audioChunk != null) result.audioChunk = audioChunk;
     if (hostEndedSession != null) result.hostEndedSession = hostEndedSession;
+    if (canvasSnapshot != null) result.canvasSnapshot = canvasSnapshot;
     return result;
   }
 
@@ -1514,13 +1665,14 @@ class RoomEvent extends $pb.GeneratedMessage {
     3: RoomEvent_EventType.canvasCommand,
     4: RoomEvent_EventType.audioChunk,
     5: RoomEvent_EventType.hostEndedSession,
+    6: RoomEvent_EventType.canvasSnapshot,
     0: RoomEvent_EventType.notSet
   };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'RoomEvent',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..oo(0, [1, 2, 3, 4, 5])
+    ..oo(0, [1, 2, 3, 4, 5, 6])
     ..aOM<UserJoined>(1, _omitFieldNames ? '' : 'userJoined',
         subBuilder: UserJoined.create)
     ..aOM<UserLeft>(2, _omitFieldNames ? '' : 'userLeft',
@@ -1531,6 +1683,8 @@ class RoomEvent extends $pb.GeneratedMessage {
         subBuilder: BroadcastedAudioChunk.create)
     ..aOM<HostEndedSession>(5, _omitFieldNames ? '' : 'hostEndedSession',
         subBuilder: HostEndedSession.create)
+    ..aOM<CanvasSnapshot>(6, _omitFieldNames ? '' : 'canvasSnapshot',
+        subBuilder: CanvasSnapshot.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1610,6 +1764,17 @@ class RoomEvent extends $pb.GeneratedMessage {
   void clearHostEndedSession() => $_clearField(5);
   @$pb.TagNumber(5)
   HostEndedSession ensureHostEndedSession() => $_ensure(4);
+
+  @$pb.TagNumber(6)
+  CanvasSnapshot get canvasSnapshot => $_getN(5);
+  @$pb.TagNumber(6)
+  set canvasSnapshot(CanvasSnapshot value) => $_setField(6, value);
+  @$pb.TagNumber(6)
+  $core.bool hasCanvasSnapshot() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearCanvasSnapshot() => $_clearField(6);
+  @$pb.TagNumber(6)
+  CanvasSnapshot ensureCanvasSnapshot() => $_ensure(5);
 }
 
 class HostEndedSession extends $pb.GeneratedMessage {
@@ -1670,12 +1835,14 @@ class HostEndedSession extends $pb.GeneratedMessage {
 
 class UserJoined extends $pb.GeneratedMessage {
   factory UserJoined({
-    $core.String? clientId,
+    $core.int? participantId,
     $core.String? username,
+    $core.String? clientIdUuid,
   }) {
     final result = create();
-    if (clientId != null) result.clientId = clientId;
+    if (participantId != null) result.participantId = participantId;
     if (username != null) result.username = username;
+    if (clientIdUuid != null) result.clientIdUuid = clientIdUuid;
     return result;
   }
 
@@ -1692,8 +1859,10 @@ class UserJoined extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'UserJoined',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..aOS(1, _omitFieldNames ? '' : 'clientId')
+    ..a<$core.int>(
+        1, _omitFieldNames ? '' : 'participantId', $pb.PbFieldType.OU3)
     ..aOS(2, _omitFieldNames ? '' : 'username')
+    ..aOS(3, _omitFieldNames ? '' : 'clientIdUuid')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1716,13 +1885,13 @@ class UserJoined extends $pb.GeneratedMessage {
   static UserJoined? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $core.String get clientId => $_getSZ(0);
+  $core.int get participantId => $_getIZ(0);
   @$pb.TagNumber(1)
-  set clientId($core.String value) => $_setString(0, value);
+  set participantId($core.int value) => $_setUnsignedInt32(0, value);
   @$pb.TagNumber(1)
-  $core.bool hasClientId() => $_has(0);
+  $core.bool hasParticipantId() => $_has(0);
   @$pb.TagNumber(1)
-  void clearClientId() => $_clearField(1);
+  void clearParticipantId() => $_clearField(1);
 
   @$pb.TagNumber(2)
   $core.String get username => $_getSZ(1);
@@ -1732,15 +1901,24 @@ class UserJoined extends $pb.GeneratedMessage {
   $core.bool hasUsername() => $_has(1);
   @$pb.TagNumber(2)
   void clearUsername() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get clientIdUuid => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set clientIdUuid($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasClientIdUuid() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearClientIdUuid() => $_clearField(3);
 }
 
 class UserLeft extends $pb.GeneratedMessage {
   factory UserLeft({
-    $core.String? clientId,
+    $core.int? participantId,
     $core.String? username,
   }) {
     final result = create();
-    if (clientId != null) result.clientId = clientId;
+    if (participantId != null) result.participantId = participantId;
     if (username != null) result.username = username;
     return result;
   }
@@ -1758,7 +1936,8 @@ class UserLeft extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'UserLeft',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..aOS(1, _omitFieldNames ? '' : 'clientId')
+    ..a<$core.int>(
+        1, _omitFieldNames ? '' : 'participantId', $pb.PbFieldType.OU3)
     ..aOS(2, _omitFieldNames ? '' : 'username')
     ..hasRequiredFields = false;
 
@@ -1782,13 +1961,13 @@ class UserLeft extends $pb.GeneratedMessage {
   static UserLeft? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $core.String get clientId => $_getSZ(0);
+  $core.int get participantId => $_getIZ(0);
   @$pb.TagNumber(1)
-  set clientId($core.String value) => $_setString(0, value);
+  set participantId($core.int value) => $_setUnsignedInt32(0, value);
   @$pb.TagNumber(1)
-  $core.bool hasClientId() => $_has(0);
+  $core.bool hasParticipantId() => $_has(0);
   @$pb.TagNumber(1)
-  void clearClientId() => $_clearField(1);
+  void clearParticipantId() => $_clearField(1);
 
   @$pb.TagNumber(2)
   $core.String get username => $_getSZ(1);
@@ -1802,11 +1981,11 @@ class UserLeft extends $pb.GeneratedMessage {
 
 class BroadcastedCanvasCommand extends $pb.GeneratedMessage {
   factory BroadcastedCanvasCommand({
-    $core.String? fromClientId,
+    $core.int? fromParticipantId,
     CanvasCommand? command,
   }) {
     final result = create();
-    if (fromClientId != null) result.fromClientId = fromClientId;
+    if (fromParticipantId != null) result.fromParticipantId = fromParticipantId;
     if (command != null) result.command = command;
     return result;
   }
@@ -1824,7 +2003,8 @@ class BroadcastedCanvasCommand extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'BroadcastedCanvasCommand',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..aOS(1, _omitFieldNames ? '' : 'fromClientId')
+    ..a<$core.int>(
+        1, _omitFieldNames ? '' : 'fromParticipantId', $pb.PbFieldType.OU3)
     ..aOM<CanvasCommand>(2, _omitFieldNames ? '' : 'command',
         subBuilder: CanvasCommand.create)
     ..hasRequiredFields = false;
@@ -1853,13 +2033,13 @@ class BroadcastedCanvasCommand extends $pb.GeneratedMessage {
   static BroadcastedCanvasCommand? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $core.String get fromClientId => $_getSZ(0);
+  $core.int get fromParticipantId => $_getIZ(0);
   @$pb.TagNumber(1)
-  set fromClientId($core.String value) => $_setString(0, value);
+  set fromParticipantId($core.int value) => $_setUnsignedInt32(0, value);
   @$pb.TagNumber(1)
-  $core.bool hasFromClientId() => $_has(0);
+  $core.bool hasFromParticipantId() => $_has(0);
   @$pb.TagNumber(1)
-  void clearFromClientId() => $_clearField(1);
+  void clearFromParticipantId() => $_clearField(1);
 
   @$pb.TagNumber(2)
   CanvasCommand get command => $_getN(1);
@@ -1875,11 +2055,11 @@ class BroadcastedCanvasCommand extends $pb.GeneratedMessage {
 
 class BroadcastedAudioChunk extends $pb.GeneratedMessage {
   factory BroadcastedAudioChunk({
-    $core.String? fromClientId,
+    $core.int? fromParticipantId,
     AudioChunk? chunk,
   }) {
     final result = create();
-    if (fromClientId != null) result.fromClientId = fromClientId;
+    if (fromParticipantId != null) result.fromParticipantId = fromParticipantId;
     if (chunk != null) result.chunk = chunk;
     return result;
   }
@@ -1897,7 +2077,8 @@ class BroadcastedAudioChunk extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'BroadcastedAudioChunk',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'communication'),
       createEmptyInstance: create)
-    ..aOS(1, _omitFieldNames ? '' : 'fromClientId')
+    ..a<$core.int>(
+        1, _omitFieldNames ? '' : 'fromParticipantId', $pb.PbFieldType.OU3)
     ..aOM<AudioChunk>(2, _omitFieldNames ? '' : 'chunk',
         subBuilder: AudioChunk.create)
     ..hasRequiredFields = false;
@@ -1926,13 +2107,13 @@ class BroadcastedAudioChunk extends $pb.GeneratedMessage {
   static BroadcastedAudioChunk? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $core.String get fromClientId => $_getSZ(0);
+  $core.int get fromParticipantId => $_getIZ(0);
   @$pb.TagNumber(1)
-  set fromClientId($core.String value) => $_setString(0, value);
+  set fromParticipantId($core.int value) => $_setUnsignedInt32(0, value);
   @$pb.TagNumber(1)
-  $core.bool hasFromClientId() => $_has(0);
+  $core.bool hasFromParticipantId() => $_has(0);
   @$pb.TagNumber(1)
-  void clearFromClientId() => $_clearField(1);
+  void clearFromParticipantId() => $_clearField(1);
 
   @$pb.TagNumber(2)
   AudioChunk get chunk => $_getN(1);

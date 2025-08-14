@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'package:black_board_mobile/src/rust/api.dart';
-import 'package:black_board_mobile/src/rust/bridge_models.dart' as rust;
+import 'package:black_board_mobile/src/rust/bridge_models.dart';
 import 'package:black_board_mobile/src/rust/frb_generated.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
-import 'package:uuid/uuid.dart';
 import 'src/generated/communication.pb.dart' as proto;
 
 Future<void> main() async {
@@ -13,15 +12,17 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-const uuid = Uuid();
-// ignore: invalid_use_of_internal_member
-final api = RustLib.instance.api;
-
 class PathData {
-  final String id;
+  final BigInt id;
   final List<Offset> points;
   final Color color;
   final double strokeWidth;
+
+  PathData.fromRust(FlutterPathFull rustPath)
+    : id = rustPath.pathId,
+      points = rustPath.points.map((p) => Offset(p.dx, p.dy)).toList(),
+      color = Color(rustPath.color),
+      strokeWidth = rustPath.strokeWidth.toDouble();
 
   PathData({
     required this.id,
@@ -52,23 +53,24 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final _serverAddrController = TextEditingController(text: '107.173.62.153:12345');
+  final _serverAddrController = TextEditingController(
+    text: '107.173.62.153:12345',
+  );
   final _usernameController = TextEditingController(text: 'FlutterUser');
   final _roomIdController = TextEditingController();
 
   String? _roomId;
   bool _isConnected = false;
-  StreamSubscription<rust.EventMessage>? _eventSubscription;
+  StreamSubscription? _eventSubscription;
 
-  Map<String, PathData> _paths = {};
-  String? _currentPathId;
+  Map<BigInt, PathData> _paths = {};
+  BigInt? _currentPathId;
 
   Color _brushColor = Colors.black;
   Color _backgroundColor = Colors.white;
   double _currentStrokeWidth = 4.0;
   bool _isErasing = false;
 
-  // *** متغیرهای جدید برای لیست جلسات ضبط شده ***
   List<String> _recordings = [];
   bool _isLoadingRecordings = false;
   bool _isReplaying = false;
@@ -86,50 +88,70 @@ class _MyHomePageState extends State<MyHomePage> {
     _eventSubscription?.cancel();
     final stream = listenEvents();
     _eventSubscription = stream.listen(
-          (event) {
-        try {
-          final roomEvent = proto.RoomEvent.fromBuffer(event.data);
-          if (roomEvent.hasCanvasCommand()) {
-            final command = roomEvent.canvasCommand.command;
-            if (mounted) {
-              setState(() {
-                if (command.hasPathStart()) {
-                  final pathStart = command.pathStart;
-                  _paths[pathStart.id] = PathData(
-                    id: pathStart.id,
-                    points: [Offset(pathStart.point.dx, pathStart.point.dy)],
-                    color: Color(pathStart.color),
-                    strokeWidth: pathStart.strokeWidth,
-                  );
-                } else if (command.hasPathAppend()) {
-                  final pathAppend = command.pathAppend;
-                  if (_paths.containsKey(pathAppend.id)) {
-                    _paths[pathAppend.id]!.points.add(
-                      Offset(pathAppend.point.dx, pathAppend.point.dy),
-                    );
-                  }
-                } else if (command.hasPathFull()) {
-                  final pathFull = command.pathFull;
-                  _paths[pathFull.id] = PathData(
-                    id: pathFull.id,
-                    points: pathFull.points.map((p) => Offset(p.dx, p.dy)).toList(),
-                    color: Color(pathFull.color),
-                    strokeWidth: pathFull.strokeWidth,
-                  );
-                }
-              });
-            }
-          } else if (roomEvent.hasHostEndedSession()) {
-            _showErrorDialog("The host has ended the session.");
-            _disconnect();
-          }
-        } catch (e) {
-          debugPrint("Failed to parse event: $e");
-        }
-      },
+      _handleRoomEvent,
       onError: (e) => _showErrorDialog(e.toString()),
       onDone: _disconnect,
     );
+  }
+
+  void _handleRoomEvent(EventMessage event) {
+    try {
+      final roomEvent = proto.RoomEvent.fromBuffer(event.data);
+
+      if (roomEvent.hasCanvasSnapshot()) {
+        final snapshot = roomEvent.canvasSnapshot;
+        final newPaths = <BigInt, PathData>{};
+        for (final pathFull in snapshot.paths) {
+          final pathId = BigInt.parse(pathFull.pathId.toString());
+          newPaths[pathId] = PathData(
+            id: pathId,
+            points: pathFull.points
+                .map((p) => Offset(p.dx.toDouble(), p.dy.toDouble()))
+                .toList(),
+            color: Color(pathFull.color),
+            strokeWidth: pathFull.strokeWidth.toDouble(),
+          );
+        }
+        if (mounted) setState(() => _paths = newPaths);
+      } else if (roomEvent.hasCanvasCommand()) {
+        final command = roomEvent.canvasCommand.command;
+        if (mounted) {
+          setState(() {
+            if (command.hasPathStart()) {
+              final pathStart = command.pathStart;
+              final pathId = BigInt.parse(pathStart.pathId.toString());
+              _paths[pathId] = PathData(
+                id: pathId,
+                points: [
+                  Offset(
+                    pathStart.point.dx.toDouble(),
+                    pathStart.point.dy.toDouble(),
+                  ),
+                ],
+                color: Color(pathStart.color),
+                strokeWidth: pathStart.strokeWidth.toDouble(),
+              );
+            } else if (command.hasPathAppend()) {
+              final pathAppend = command.pathAppend;
+              final pathId = BigInt.parse(pathAppend.pathId.toString());
+              if (_paths.containsKey(pathId)) {
+                _paths[pathId]!.points.add(
+                  Offset(
+                    pathAppend.point.dx.toDouble(),
+                    pathAppend.point.dy.toDouble(),
+                  ),
+                );
+              }
+            }
+          });
+        }
+      } else if (roomEvent.hasHostEndedSession()) {
+        _showErrorDialog("The host has ended the session.");
+        _disconnect();
+      }
+    } catch (e) {
+      debugPrint("Failed to parse event: $e");
+    }
   }
 
   void _createRoom() async {
@@ -155,17 +177,25 @@ class _MyHomePageState extends State<MyHomePage> {
   void _joinRoom() async {
     if (_isConnected || _roomIdController.text.isEmpty) return;
     try {
-      await joinRoom(
+      final initialPaths = await joinRoom(
         serverAddr: _serverAddrController.text,
         username: _usernameController.text,
         roomId: _roomIdController.text,
       );
+
+      final newPaths = <BigInt, PathData>{};
+      for (final rustPath in initialPaths) {
+        newPaths[rustPath.pathId] = PathData.fromRust(rustPath);
+      }
+
       if (mounted) {
         setState(() {
           _isConnected = true;
           _roomId = _roomIdController.text;
+          _paths = newPaths; // نمایش نقاشی‌های قبلی
         });
       }
+
       _setupStreamListener();
     } catch (e) {
       _showErrorDialog(e.toString());
@@ -176,7 +206,6 @@ class _MyHomePageState extends State<MyHomePage> {
     if (!_isConnected && !_isReplaying) return;
     _eventSubscription?.cancel();
     _eventSubscription = null;
-    // فقط در صورتی که اتصال زنده باشد، disconnect را فراخوانی می‌کنیم
     if (_isConnected) {
       disconnect();
     }
@@ -192,8 +221,18 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _onPanStart(DragStartDetails details) {
     if (!_isConnected) return;
+
+    final newPathId = startPath(
+      point: FlutterPoint(
+        dx: details.localPosition.dx,
+        dy: details.localPosition.dy,
+      ),
+      color: (_isErasing ? _backgroundColor : _brushColor).value,
+      strokeWidth: _currentStrokeWidth,
+    );
+
     setState(() {
-      _currentPathId = uuid.v4();
+      _currentPathId = newPathId;
       final newPath = PathData(
         id: _currentPathId!,
         points: [details.localPosition],
@@ -201,39 +240,28 @@ class _MyHomePageState extends State<MyHomePage> {
         strokeWidth: _currentStrokeWidth,
       );
       _paths[_currentPathId!] = newPath;
-
-      startPath(
-        id: newPath.id,
-        point: rust.Point(dx: newPath.points.first.dx, dy: newPath.points.first.dy),
-        color: newPath.color.value,
-        strokeWidth: newPath.strokeWidth,
-      );
     });
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
     if (_currentPathId == null || _paths[_currentPathId] == null) return;
+
     setState(() {
       _paths[_currentPathId]!.points.add(details.localPosition);
     });
 
     appendToPath(
-      id: _currentPathId!,
-      point: rust.Point(dx: details.localPosition.dx, dy: details.localPosition.dy),
+      pathId: _currentPathId!,
+      point: FlutterPoint(
+        dx: details.localPosition.dx,
+        dy: details.localPosition.dy,
+      ),
     );
   }
 
   void _onPanEnd(DragEndDetails details) {
-    if (_currentPathId == null || _paths[_currentPathId] == null) return;
-
-    final finishedPath = _paths[_currentPathId]!;
-    finishPath(
-      id: finishedPath.id,
-      points: finishedPath.points.map((p) => rust.Point(dx: p.dx, dy: p.dy)).toList(),
-      color: finishedPath.color.value,
-      strokeWidth: finishedPath.strokeWidth,
-    );
-
+    if (_currentPathId == null) return;
+    endPath(pathId: _currentPathId!);
     _currentPathId = null;
   }
 
@@ -242,7 +270,9 @@ class _MyHomePageState extends State<MyHomePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(isBackground ? 'Pick Background Color' : 'Pick Brush Color'),
+        title: Text(
+          isBackground ? 'Pick Background Color' : 'Pick Brush Color',
+        ),
         content: SingleChildScrollView(
           child: ColorPicker(
             pickerColor: pickerColor,
@@ -285,11 +315,12 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  // *** توابع جدید برای لیست و بازپخش جلسات ***
   void _fetchRecordings() async {
     setState(() => _isLoadingRecordings = true);
     try {
-      final filenames = await listRecordings(serverAddr: _serverAddrController.text);
+      final filenames = await listRecordings(
+        serverAddr: _serverAddrController.text,
+      );
       if (mounted) {
         setState(() {
           _recordings = filenames;
@@ -310,7 +341,7 @@ class _MyHomePageState extends State<MyHomePage> {
       return;
     }
     setState(() {
-      _paths = {}; // پاک کردن بوم برای بازپخش
+      _paths = {};
       _isReplaying = true;
     });
 
@@ -320,41 +351,8 @@ class _MyHomePageState extends State<MyHomePage> {
     );
 
     _eventSubscription = stream.listen(
-          (event) {
-        try {
-          final roomEvent = proto.RoomEvent.fromBuffer(event.data);
-          if (roomEvent.hasCanvasCommand()) {
-            final command = roomEvent.canvasCommand.command;
-            if (mounted) {
-              setState(() {
-                if (command.hasPathStart()) {
-                  final pathStart = command.pathStart;
-                  _paths[pathStart.id] = PathData(
-                    id: pathStart.id,
-                    points: [Offset(pathStart.point.dx, pathStart.point.dy)],
-                    color: Color(pathStart.color),
-                    strokeWidth: pathStart.strokeWidth,
-                  );
-                } else if (command.hasPathAppend()) {
-                  final pathAppend = command.pathAppend;
-                  if (_paths.containsKey(pathAppend.id)) {
-                    _paths[pathAppend.id]!.points.add(Offset(pathAppend.point.dx, pathAppend.point.dy));
-                  }
-                } else if (command.hasPathFull()) {
-                  final pathFull = command.pathFull;
-                  _paths[pathFull.id] = PathData(
-                    id: pathFull.id,
-                    points: pathFull.points.map((p) => Offset(p.dx, p.dy)).toList(),
-                    color: Color(pathFull.color),
-                    strokeWidth: pathFull.strokeWidth,
-                  );
-                }
-              });
-            }
-          }
-        } catch (e) {
-          debugPrint("Failed to parse replay event: $e");
-        }
+      (event) {
+        _handleRoomEvent(event);
       },
       onError: (e) {
         _showErrorDialog(e.toString());
@@ -362,9 +360,11 @@ class _MyHomePageState extends State<MyHomePage> {
       },
       onDone: () {
         _disconnect();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Replay finished!')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Replay finished!')));
+        }
       },
     );
   }
@@ -376,22 +376,29 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-            _isReplaying ? 'Replaying Session...' :
-            (_isConnected ? 'Room: $_roomId' : 'Blackboard Client')
+          _isReplaying
+              ? 'Replaying Session...'
+              : (_isConnected ? 'Room: $_roomId' : 'Blackboard Client'),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.palette, color: Colors.blueGrey),
+            icon: const Icon(Icons.palette, color: Colors.blueGrey),
             tooltip: 'Change Background Color',
             onPressed: () => _openColorPicker(true),
           ),
           IconButton(
-            icon: Icon(Icons.brush, color: _isErasing ? Colors.grey : _brushColor),
+            icon: Icon(
+              Icons.brush,
+              color: _isErasing ? Colors.grey : _brushColor,
+            ),
             tooltip: 'Brush',
             onPressed: () => setState(() => _isErasing = false),
           ),
           IconButton(
-            icon: Icon(Icons.cleaning_services, color: _isErasing ? Colors.blue : Colors.grey),
+            icon: Icon(
+              Icons.cleaning_services,
+              color: _isErasing ? Colors.blue : Colors.grey,
+            ),
             tooltip: 'Eraser',
             onPressed: () => setState(() => _isErasing = true),
           ),
@@ -415,7 +422,9 @@ class _MyHomePageState extends State<MyHomePage> {
                   children: [
                     TextField(
                       controller: _serverAddrController,
-                      decoration: const InputDecoration(labelText: 'Server Address'),
+                      decoration: const InputDecoration(
+                        labelText: 'Server Address',
+                      ),
                       enabled: controlsEnabled,
                     ),
                     TextField(
@@ -429,7 +438,9 @@ class _MyHomePageState extends State<MyHomePage> {
                         Expanded(
                           child: TextField(
                             controller: _roomIdController,
-                            decoration: const InputDecoration(labelText: 'Room ID'),
+                            decoration: const InputDecoration(
+                              labelText: 'Room ID',
+                            ),
                             enabled: controlsEnabled,
                           ),
                         ),
@@ -458,31 +469,50 @@ class _MyHomePageState extends State<MyHomePage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("Recorded Sessions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        const Text(
+                          "Recorded Sessions",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.refresh),
-                          onPressed: _isLoadingRecordings || !controlsEnabled ? null : _fetchRecordings,
+                          onPressed: _isLoadingRecordings || !controlsEnabled
+                              ? null
+                              : _fetchRecordings,
                         ),
                       ],
                     ),
                     _isLoadingRecordings
                         ? const Center(child: CircularProgressIndicator())
                         : _recordings.isEmpty
-                        ? const Center(child: Text("No recordings found. Press refresh to fetch."))
+                        ? const Center(
+                            child: Text(
+                              "No recordings found. Press refresh to fetch.",
+                            ),
+                          )
                         : SizedBox(
-                      height: 150,
-                      child: ListView.builder(
-                        itemCount: _recordings.length,
-                        itemBuilder: (context, index) {
-                          final filename = _recordings[index];
-                          return ListTile(
-                            title: Text(filename, style: TextStyle(fontSize: 12)),
-                            leading: const Icon(Icons.movie_creation_outlined),
-                            onTap: controlsEnabled ? () => _startReplay(filename) : null,
-                          );
-                        },
-                      ),
-                    ),
+                            height: 150,
+                            child: ListView.builder(
+                              itemCount: _recordings.length,
+                              itemBuilder: (context, index) {
+                                final filename = _recordings[index];
+                                return ListTile(
+                                  title: Text(
+                                    filename,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  leading: const Icon(
+                                    Icons.movie_creation_outlined,
+                                  ),
+                                  onTap: controlsEnabled
+                                      ? () => _startReplay(filename)
+                                      : null,
+                                );
+                              },
+                            ),
+                          ),
                   ],
                 ),
               ),
@@ -498,7 +528,8 @@ class _MyHomePageState extends State<MyHomePage> {
                     value: _currentStrokeWidth,
                     min: 1.0,
                     max: 20.0,
-                    onChanged: (value) => setState(() => _currentStrokeWidth = value),
+                    onChanged: (value) =>
+                        setState(() => _currentStrokeWidth = value),
                   ),
                 ),
               ],
@@ -513,7 +544,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.2),
+                    color: Colors.grey.withAlpha((0.2 * 255).toInt()),
                     spreadRadius: 2,
                     blurRadius: 5,
                   ),

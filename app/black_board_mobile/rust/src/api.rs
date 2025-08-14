@@ -1,20 +1,20 @@
-use crate::bridge_models::{EventMessage, Point};
+use crate::bridge_models::{EventMessage, FlutterPathFull, FlutterPoint};
 use crate::client::ClientState;
+use crate::frb_generated::StreamSink;
 use crate::proto::{
-    canvas_command, room_message, AudioChunk, CanvasCommand, PathAppend, PathFull, PathStart,
+    canvas_command, room_message, AudioChunk, CanvasCommand, PathAppend, PathEnd, PathStart,
 };
 use anyhow::Result;
-use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use lazy_static::lazy_static;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
+use tracing::error;
 use tracing_subscriber::FmtSubscriber;
 
 lazy_static! {
-    static ref TOKIO_RUNTIME: Runtime =
-        Runtime::new().expect("Failed to create Tokio runtime");
+    static ref TOKIO_RUNTIME: Runtime = Runtime::new().expect("Failed to create Tokio runtime");
 }
 lazy_static! {
     static ref CLIENT_STATE: Arc<Mutex<ClientState>> = Arc::new(Mutex::new(
@@ -24,10 +24,13 @@ lazy_static! {
 
 #[frb(init)]
 pub fn init_app() {
-    let subscriber = FmtSubscriber::builder().with_max_level(tracing::Level::INFO).finish();
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .finish();
     let _ = tracing::subscriber::set_global_default(subscriber);
 }
 
+// CHANGED: دیگر sink نمی‌گیرد و String برمی‌گرداند
 pub fn create_room(server_addr: String, username: String) -> Result<String> {
     TOKIO_RUNTIME.block_on(async {
         let mut state = CLIENT_STATE.lock().await;
@@ -35,13 +38,19 @@ pub fn create_room(server_addr: String, username: String) -> Result<String> {
     })
 }
 
-pub fn join_room(server_addr: String, username: String, room_id: String) -> Result<()> {
+// CHANGED: دیگر sink نمی‌گیرد
+pub fn join_room(
+    server_addr: String,
+    username: String,
+    room_id: String,
+) -> Result<Vec<FlutterPathFull>> {
     TOKIO_RUNTIME.block_on(async {
         let mut state = CLIENT_STATE.lock().await;
         state.join_room(server_addr, username, room_id).await
     })
 }
 
+// NEW: این تابع دوباره عمومی شد
 pub fn listen_events(events_sink: StreamSink<EventMessage>) -> Result<()> {
     TOKIO_RUNTIME.block_on(async {
         let state = CLIENT_STATE.lock().await;
@@ -69,29 +78,37 @@ pub fn list_recordings(server_addr: String) -> Result<Vec<String>> {
     })
 }
 
-pub fn start_path(id: String, point: Point, color: u32, stroke_width: f64) -> Result<()> {
-    TOKIO_RUNTIME.block_on(async {
+#[frb(sync)]
+pub fn start_path(point: FlutterPoint, color: u32, stroke_width: f32) -> Result<u64> {
+    let mut state = futures::executor::block_on(CLIENT_STATE.lock());
+    let path_id = state.generate_path_id()?;
+    let canvas_command = CanvasCommand {
+        timestamp_ms: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_millis() as i64,
+        command_type: Some(canvas_command::CommandType::PathStart(PathStart {
+            path_id,
+            point: Some(crate::proto::Point {
+                dx: point.dx,
+                dy: point.dy,
+            }),
+            color,
+            stroke_width,
+        })),
+    };
+    let payload = room_message::Payload::CanvasCommand(canvas_command);
+
+    TOKIO_RUNTIME.spawn(async move {
         let state = CLIENT_STATE.lock().await;
-        let canvas_command = CanvasCommand {
-            timestamp_ms: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_millis() as i64,
-            command_type: Some(canvas_command::CommandType::PathStart(PathStart {
-                id,
-                point: Some(crate::proto::Point {
-                    dx: point.dx,
-                    dy: point.dy,
-                }),
-                color,
-                stroke_width,
-            })),
-        };
-        let payload = room_message::Payload::CanvasCommand(canvas_command);
-        state.send_room_message(payload).await
-    })
+        if let Err(e) = state.send_room_message(payload).await {
+            error!("Failed to send start_path: {}", e);
+        }
+    });
+
+    Ok(path_id)
 }
 
-pub fn append_to_path(id: String, point: Point) -> Result<()> {
+pub fn append_to_path(path_id: u64, point: FlutterPoint) -> Result<()> {
     TOKIO_RUNTIME.block_on(async {
         let state = CLIENT_STATE.lock().await;
         let canvas_command = CanvasCommand {
@@ -99,7 +116,7 @@ pub fn append_to_path(id: String, point: Point) -> Result<()> {
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_millis() as i64,
             command_type: Some(canvas_command::CommandType::PathAppend(PathAppend {
-                id,
+                path_id,
                 point: Some(crate::proto::Point {
                     dx: point.dx,
                     dy: point.dy,
@@ -111,22 +128,14 @@ pub fn append_to_path(id: String, point: Point) -> Result<()> {
     })
 }
 
-pub fn finish_path(id: String, points: Vec<Point>, color: u32, stroke_width: f64) -> Result<()> {
+pub fn end_path(path_id: u64) -> Result<()> {
     TOKIO_RUNTIME.block_on(async {
         let state = CLIENT_STATE.lock().await;
         let canvas_command = CanvasCommand {
             timestamp_ms: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_millis() as i64,
-            command_type: Some(canvas_command::CommandType::PathFull(PathFull {
-                id,
-                points: points
-                    .into_iter()
-                    .map(|p| crate::proto::Point { dx: p.dx, dy: p.dy })
-                    .collect(),
-                color,
-                stroke_width,
-            })),
+            command_type: Some(canvas_command::CommandType::PathEnd(PathEnd { path_id })),
         };
         let payload = room_message::Payload::CanvasCommand(canvas_command);
         state.send_room_message(payload).await

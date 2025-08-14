@@ -189,20 +189,20 @@ final $typed_data.Uint8List roomMessageDescriptor = $convert.base64Decode(
 const Point$json = {
   '1': 'Point',
   '2': [
-    {'1': 'dx', '3': 1, '4': 1, '5': 1, '10': 'dx'},
-    {'1': 'dy', '3': 2, '4': 1, '5': 1, '10': 'dy'},
+    {'1': 'dx', '3': 1, '4': 1, '5': 2, '10': 'dx'},
+    {'1': 'dy', '3': 2, '4': 1, '5': 2, '10': 'dy'},
   ],
 };
 
 /// Descriptor for `Point`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List pointDescriptor = $convert
-    .base64Decode('CgVQb2ludBIOCgJkeBgBIAEoAVICZHgSDgoCZHkYAiABKAFSAmR5');
+    .base64Decode('CgVQb2ludBIOCgJkeBgBIAEoAlICZHgSDgoCZHkYAiABKAJSAmR5');
 
 @$core.Deprecated('Use pathStartDescriptor instead')
 const PathStart$json = {
   '1': 'PathStart',
   '2': [
-    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'path_id', '3': 1, '4': 1, '5': 4, '10': 'pathId'},
     {
       '1': 'point',
       '3': 2,
@@ -212,21 +212,21 @@ const PathStart$json = {
       '10': 'point'
     },
     {'1': 'color', '3': 3, '4': 1, '5': 13, '10': 'color'},
-    {'1': 'stroke_width', '3': 4, '4': 1, '5': 1, '10': 'strokeWidth'},
+    {'1': 'stroke_width', '3': 4, '4': 1, '5': 2, '10': 'strokeWidth'},
   ],
 };
 
 /// Descriptor for `PathStart`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List pathStartDescriptor = $convert.base64Decode(
-    'CglQYXRoU3RhcnQSDgoCaWQYASABKAlSAmlkEioKBXBvaW50GAIgASgLMhQuY29tbXVuaWNhdG'
-    'lvbi5Qb2ludFIFcG9pbnQSFAoFY29sb3IYAyABKA1SBWNvbG9yEiEKDHN0cm9rZV93aWR0aBgE'
-    'IAEoAVILc3Ryb2tlV2lkdGg=');
+    'CglQYXRoU3RhcnQSFwoHcGF0aF9pZBgBIAEoBFIGcGF0aElkEioKBXBvaW50GAIgASgLMhQuY2'
+    '9tbXVuaWNhdGlvbi5Qb2ludFIFcG9pbnQSFAoFY29sb3IYAyABKA1SBWNvbG9yEiEKDHN0cm9r'
+    'ZV93aWR0aBgEIAEoAlILc3Ryb2tlV2lkdGg=');
 
 @$core.Deprecated('Use pathAppendDescriptor instead')
 const PathAppend$json = {
   '1': 'PathAppend',
   '2': [
-    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'path_id', '3': 1, '4': 1, '5': 4, '10': 'pathId'},
     {
       '1': 'point',
       '3': 2,
@@ -240,14 +240,26 @@ const PathAppend$json = {
 
 /// Descriptor for `PathAppend`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List pathAppendDescriptor = $convert.base64Decode(
-    'CgpQYXRoQXBwZW5kEg4KAmlkGAEgASgJUgJpZBIqCgVwb2ludBgCIAEoCzIULmNvbW11bmljYX'
-    'Rpb24uUG9pbnRSBXBvaW50');
+    'CgpQYXRoQXBwZW5kEhcKB3BhdGhfaWQYASABKARSBnBhdGhJZBIqCgVwb2ludBgCIAEoCzIULm'
+    'NvbW11bmljYXRpb24uUG9pbnRSBXBvaW50');
+
+@$core.Deprecated('Use pathEndDescriptor instead')
+const PathEnd$json = {
+  '1': 'PathEnd',
+  '2': [
+    {'1': 'path_id', '3': 1, '4': 1, '5': 4, '10': 'pathId'},
+  ],
+};
+
+/// Descriptor for `PathEnd`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List pathEndDescriptor =
+    $convert.base64Decode('CgdQYXRoRW5kEhcKB3BhdGhfaWQYASABKARSBnBhdGhJZA==');
 
 @$core.Deprecated('Use pathFullDescriptor instead')
 const PathFull$json = {
   '1': 'PathFull',
   '2': [
-    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'path_id', '3': 1, '4': 1, '5': 4, '10': 'pathId'},
     {
       '1': 'points',
       '3': 2,
@@ -257,15 +269,15 @@ const PathFull$json = {
       '10': 'points'
     },
     {'1': 'color', '3': 3, '4': 1, '5': 13, '10': 'color'},
-    {'1': 'stroke_width', '3': 4, '4': 1, '5': 1, '10': 'strokeWidth'},
+    {'1': 'stroke_width', '3': 4, '4': 1, '5': 2, '10': 'strokeWidth'},
   ],
 };
 
 /// Descriptor for `PathFull`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List pathFullDescriptor = $convert.base64Decode(
-    'CghQYXRoRnVsbBIOCgJpZBgBIAEoCVICaWQSLAoGcG9pbnRzGAIgAygLMhQuY29tbXVuaWNhdG'
-    'lvbi5Qb2ludFIGcG9pbnRzEhQKBWNvbG9yGAMgASgNUgVjb2xvchIhCgxzdHJva2Vfd2lkdGgY'
-    'BCABKAFSC3N0cm9rZVdpZHRo');
+    'CghQYXRoRnVsbBIXCgdwYXRoX2lkGAEgASgEUgZwYXRoSWQSLAoGcG9pbnRzGAIgAygLMhQuY2'
+    '9tbXVuaWNhdGlvbi5Qb2ludFIGcG9pbnRzEhQKBWNvbG9yGAMgASgNUgVjb2xvchIhCgxzdHJv'
+    'a2Vfd2lkdGgYBCABKAJSC3N0cm9rZVdpZHRo');
 
 @$core.Deprecated('Use canvasCommandDescriptor instead')
 const CanvasCommand$json = {
@@ -291,13 +303,13 @@ const CanvasCommand$json = {
       '10': 'pathAppend'
     },
     {
-      '1': 'path_full',
+      '1': 'path_end',
       '3': 4,
       '4': 1,
       '5': 11,
-      '6': '.communication.PathFull',
+      '6': '.communication.PathEnd',
       '9': 0,
-      '10': 'pathFull'
+      '10': 'pathEnd'
     },
   ],
   '8': [
@@ -310,8 +322,8 @@ final $typed_data.Uint8List canvasCommandDescriptor = $convert.base64Decode(
     'Cg1DYW52YXNDb21tYW5kEiEKDHRpbWVzdGFtcF9tcxgBIAEoA1ILdGltZXN0YW1wTXMSOQoKcG'
     'F0aF9zdGFydBgCIAEoCzIYLmNvbW11bmljYXRpb24uUGF0aFN0YXJ0SABSCXBhdGhTdGFydBI8'
     'CgtwYXRoX2FwcGVuZBgDIAEoCzIZLmNvbW11bmljYXRpb24uUGF0aEFwcGVuZEgAUgpwYXRoQX'
-    'BwZW5kEjYKCXBhdGhfZnVsbBgEIAEoCzIXLmNvbW11bmljYXRpb24uUGF0aEZ1bGxIAFIIcGF0'
-    'aEZ1bGxCDgoMY29tbWFuZF90eXBl');
+    'BwZW5kEjMKCHBhdGhfZW5kGAQgASgLMhYuY29tbXVuaWNhdGlvbi5QYXRoRW5kSABSB3BhdGhF'
+    'bmRCDgoMY29tbWFuZF90eXBl');
 
 @$core.Deprecated('Use audioChunkDescriptor instead')
 const AudioChunk$json = {
@@ -435,25 +447,63 @@ const CreateRoomResponse$json = {
   '1': 'CreateRoomResponse',
   '2': [
     {'1': 'room_id', '3': 1, '4': 1, '5': 9, '10': 'roomId'},
+    {'1': 'participant_id', '3': 2, '4': 1, '5': 13, '10': 'participantId'},
   ],
 };
 
 /// Descriptor for `CreateRoomResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List createRoomResponseDescriptor =
-    $convert.base64Decode(
-        'ChJDcmVhdGVSb29tUmVzcG9uc2USFwoHcm9vbV9pZBgBIAEoCVIGcm9vbUlk');
+final $typed_data.Uint8List createRoomResponseDescriptor = $convert.base64Decode(
+    'ChJDcmVhdGVSb29tUmVzcG9uc2USFwoHcm9vbV9pZBgBIAEoCVIGcm9vbUlkEiUKDnBhcnRpY2'
+    'lwYW50X2lkGAIgASgNUg1wYXJ0aWNpcGFudElk');
+
+@$core.Deprecated('Use canvasSnapshotDescriptor instead')
+const CanvasSnapshot$json = {
+  '1': 'CanvasSnapshot',
+  '2': [
+    {
+      '1': 'paths',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.communication.PathFull',
+      '10': 'paths'
+    },
+  ],
+};
+
+/// Descriptor for `CanvasSnapshot`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List canvasSnapshotDescriptor = $convert.base64Decode(
+    'Cg5DYW52YXNTbmFwc2hvdBItCgVwYXRocxgBIAMoCzIXLmNvbW11bmljYXRpb24uUGF0aEZ1bG'
+    'xSBXBhdGhz');
 
 @$core.Deprecated('Use joinRoomResponseDescriptor instead')
 const JoinRoomResponse$json = {
   '1': 'JoinRoomResponse',
   '2': [
     {'1': 'message', '3': 1, '4': 1, '5': 9, '10': 'message'},
+    {'1': 'participant_id', '3': 2, '4': 1, '5': 13, '10': 'participantId'},
+    {
+      '1': 'initial_canvas_state',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.CanvasSnapshot',
+      '9': 0,
+      '10': 'initialCanvasState',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_initial_canvas_state'},
   ],
 };
 
 /// Descriptor for `JoinRoomResponse`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List joinRoomResponseDescriptor = $convert.base64Decode(
-    'ChBKb2luUm9vbVJlc3BvbnNlEhgKB21lc3NhZ2UYASABKAlSB21lc3NhZ2U=');
+    'ChBKb2luUm9vbVJlc3BvbnNlEhgKB21lc3NhZ2UYASABKAlSB21lc3NhZ2USJQoOcGFydGljaX'
+    'BhbnRfaWQYAiABKA1SDXBhcnRpY2lwYW50SWQSVAoUaW5pdGlhbF9jYW52YXNfc3RhdGUYAyAB'
+    'KAsyHS5jb21tdW5pY2F0aW9uLkNhbnZhc1NuYXBzaG90SABSEmluaXRpYWxDYW52YXNTdGF0ZY'
+    'gBAUIXChVfaW5pdGlhbF9jYW52YXNfc3RhdGU=');
 
 @$core.Deprecated('Use errorResponseDescriptor instead')
 const ErrorResponse$json = {
@@ -516,6 +566,15 @@ const RoomEvent$json = {
       '9': 0,
       '10': 'hostEndedSession'
     },
+    {
+      '1': 'canvas_snapshot',
+      '3': 6,
+      '4': 1,
+      '5': 11,
+      '6': '.communication.CanvasSnapshot',
+      '9': 0,
+      '10': 'canvasSnapshot'
+    },
   ],
   '8': [
     {'1': 'event_type'},
@@ -530,7 +589,9 @@ final $typed_data.Uint8List roomEventDescriptor = $convert.base64Decode(
     'lvbi5Ccm9hZGNhc3RlZENhbnZhc0NvbW1hbmRIAFINY2FudmFzQ29tbWFuZBJHCgthdWRpb19j'
     'aHVuaxgEIAEoCzIkLmNvbW11bmljYXRpb24uQnJvYWRjYXN0ZWRBdWRpb0NodW5rSABSCmF1ZG'
     'lvQ2h1bmsSTwoSaG9zdF9lbmRlZF9zZXNzaW9uGAUgASgLMh8uY29tbXVuaWNhdGlvbi5Ib3N0'
-    'RW5kZWRTZXNzaW9uSABSEGhvc3RFbmRlZFNlc3Npb25CDAoKZXZlbnRfdHlwZQ==');
+    'RW5kZWRTZXNzaW9uSABSEGhvc3RFbmRlZFNlc3Npb24SSAoPY2FudmFzX3NuYXBzaG90GAYgAS'
+    'gLMh0uY29tbXVuaWNhdGlvbi5DYW52YXNTbmFwc2hvdEgAUg5jYW52YXNTbmFwc2hvdEIMCgpl'
+    'dmVudF90eXBl');
 
 @$core.Deprecated('Use hostEndedSessionDescriptor instead')
 const HostEndedSession$json = {
@@ -548,35 +609,43 @@ final $typed_data.Uint8List hostEndedSessionDescriptor = $convert.base64Decode(
 const UserJoined$json = {
   '1': 'UserJoined',
   '2': [
-    {'1': 'client_id', '3': 1, '4': 1, '5': 9, '10': 'clientId'},
+    {'1': 'participant_id', '3': 1, '4': 1, '5': 13, '10': 'participantId'},
     {'1': 'username', '3': 2, '4': 1, '5': 9, '10': 'username'},
+    {'1': 'client_id_uuid', '3': 3, '4': 1, '5': 9, '10': 'clientIdUuid'},
   ],
 };
 
 /// Descriptor for `UserJoined`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List userJoinedDescriptor = $convert.base64Decode(
-    'CgpVc2VySm9pbmVkEhsKCWNsaWVudF9pZBgBIAEoCVIIY2xpZW50SWQSGgoIdXNlcm5hbWUYAi'
-    'ABKAlSCHVzZXJuYW1l');
+    'CgpVc2VySm9pbmVkEiUKDnBhcnRpY2lwYW50X2lkGAEgASgNUg1wYXJ0aWNpcGFudElkEhoKCH'
+    'VzZXJuYW1lGAIgASgJUgh1c2VybmFtZRIkCg5jbGllbnRfaWRfdXVpZBgDIAEoCVIMY2xpZW50'
+    'SWRVdWlk');
 
 @$core.Deprecated('Use userLeftDescriptor instead')
 const UserLeft$json = {
   '1': 'UserLeft',
   '2': [
-    {'1': 'client_id', '3': 1, '4': 1, '5': 9, '10': 'clientId'},
+    {'1': 'participant_id', '3': 1, '4': 1, '5': 13, '10': 'participantId'},
     {'1': 'username', '3': 2, '4': 1, '5': 9, '10': 'username'},
   ],
 };
 
 /// Descriptor for `UserLeft`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List userLeftDescriptor = $convert.base64Decode(
-    'CghVc2VyTGVmdBIbCgljbGllbnRfaWQYASABKAlSCGNsaWVudElkEhoKCHVzZXJuYW1lGAIgAS'
-    'gJUgh1c2VybmFtZQ==');
+    'CghVc2VyTGVmdBIlCg5wYXJ0aWNpcGFudF9pZBgBIAEoDVINcGFydGljaXBhbnRJZBIaCgh1c2'
+    'VybmFtZRgCIAEoCVIIdXNlcm5hbWU=');
 
 @$core.Deprecated('Use broadcastedCanvasCommandDescriptor instead')
 const BroadcastedCanvasCommand$json = {
   '1': 'BroadcastedCanvasCommand',
   '2': [
-    {'1': 'from_client_id', '3': 1, '4': 1, '5': 9, '10': 'fromClientId'},
+    {
+      '1': 'from_participant_id',
+      '3': 1,
+      '4': 1,
+      '5': 13,
+      '10': 'fromParticipantId'
+    },
     {
       '1': 'command',
       '3': 2,
@@ -590,15 +659,21 @@ const BroadcastedCanvasCommand$json = {
 
 /// Descriptor for `BroadcastedCanvasCommand`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List broadcastedCanvasCommandDescriptor = $convert.base64Decode(
-    'ChhCcm9hZGNhc3RlZENhbnZhc0NvbW1hbmQSJAoOZnJvbV9jbGllbnRfaWQYASABKAlSDGZyb2'
-    '1DbGllbnRJZBI2Cgdjb21tYW5kGAIgASgLMhwuY29tbXVuaWNhdGlvbi5DYW52YXNDb21tYW5k'
-    'Ugdjb21tYW5k');
+    'ChhCcm9hZGNhc3RlZENhbnZhc0NvbW1hbmQSLgoTZnJvbV9wYXJ0aWNpcGFudF9pZBgBIAEoDV'
+    'IRZnJvbVBhcnRpY2lwYW50SWQSNgoHY29tbWFuZBgCIAEoCzIcLmNvbW11bmljYXRpb24uQ2Fu'
+    'dmFzQ29tbWFuZFIHY29tbWFuZA==');
 
 @$core.Deprecated('Use broadcastedAudioChunkDescriptor instead')
 const BroadcastedAudioChunk$json = {
   '1': 'BroadcastedAudioChunk',
   '2': [
-    {'1': 'from_client_id', '3': 1, '4': 1, '5': 9, '10': 'fromClientId'},
+    {
+      '1': 'from_participant_id',
+      '3': 1,
+      '4': 1,
+      '5': 13,
+      '10': 'fromParticipantId'
+    },
     {
       '1': 'chunk',
       '3': 2,
@@ -612,5 +687,6 @@ const BroadcastedAudioChunk$json = {
 
 /// Descriptor for `BroadcastedAudioChunk`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List broadcastedAudioChunkDescriptor = $convert.base64Decode(
-    'ChVCcm9hZGNhc3RlZEF1ZGlvQ2h1bmsSJAoOZnJvbV9jbGllbnRfaWQYASABKAlSDGZyb21DbG'
-    'llbnRJZBIvCgVjaHVuaxgCIAEoCzIZLmNvbW11bmljYXRpb24uQXVkaW9DaHVua1IFY2h1bms=');
+    'ChVCcm9hZGNhc3RlZEF1ZGlvQ2h1bmsSLgoTZnJvbV9wYXJ0aWNpcGFudF9pZBgBIAEoDVIRZn'
+    'JvbVBhcnRpY2lwYW50SWQSLwoFY2h1bmsYAiABKAsyGS5jb21tdW5pY2F0aW9uLkF1ZGlvQ2h1'
+    'bmtSBWNodW5r');
