@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:black_board_mobile/src/services/audio_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:black_board_mobile/src/rust/api.dart';
 import 'package:black_board_mobile/src/rust/bridge_models.dart' as rust;
@@ -7,6 +9,7 @@ import 'package:black_board_mobile/src/rust/frb_generated.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'src/generated/communication.pb.dart' as proto;
+import 'package:permission_handler/permission_handler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,19 +106,47 @@ class _MyHomePageState extends State<MyHomePage> {
   int? _replayStartWallClock;
   BigInt? _replayStartEventTimestamp;
 
+  late final AudioService _audioService;
+  StreamSubscription? _outgoingAudioSubscription;
+  int _audioSequence = 0;
+
   @override
   void initState() {
     super.initState();
+    _audioService = AudioService();
     _fetchPublicRooms();
   }
 
   @override
   void dispose() {
     _disconnect(isFinal: true);
+    _audioService.dispose();
     _serverAddrController.dispose();
     _usernameController.dispose();
     _roomIdController.dispose();
     super.dispose();
+  }
+
+  Future<void> _startAudioProcessing() async {
+    final status = await Permission.microphone.request();
+    if (status != PermissionStatus.granted) {
+      _showErrorDialog('Microphone permission is required for voice chat.');
+      return;
+    }
+
+    await _audioService.start();
+
+    _outgoingAudioSubscription?.cancel();
+
+    _outgoingAudioSubscription = _audioService.outgoingAudioStream.listen((
+      audioChunk,
+    ) {
+      try {
+        sendAudioChunk(data: audioChunk, sequence: _audioSequence++);
+      } catch (e) {
+        debugPrint("Failed to send audio chunk to Rust: $e");
+      }
+    });
   }
 
   void _setupStreamListener() {
@@ -132,30 +163,53 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       final roomEvent = proto.RoomEvent.fromBuffer(event.data);
 
-      if (roomEvent.hasCanvasSnapshot()) {
-        final snapshot = roomEvent.canvasSnapshot;
-        final newPaths = <BigInt, PathData>{};
-        for (final pathFull in snapshot.paths) {
-          final pathId = BigInt.parse(pathFull.pathId.toString());
-          newPaths[pathId] = PathData(
-            id: pathId,
-            points: pathFull.points
-                .map((p) => Offset(p.dx.toDouble(), p.dy.toDouble()))
-                .toList(),
-            color: Color(pathFull.color),
-            strokeWidth: pathFull.strokeWidth.toDouble(),
-          );
-        }
-        if (mounted) setState(() => _paths = newPaths);
-      } else if (roomEvent.hasCanvasCommand()) {
-        _applyCanvasCommand(roomEvent.canvasCommand.command);
-      } else if (roomEvent.hasHostEndedSession()) {
-        if (_isReplaying) {
-          _handleReplayFinished();
-        } else {
-          _showErrorDialog("The host has ended the session.");
-          _disconnect(isFinal: true);
-        }
+      // از متد whichEventType() برای تشخیص نوع رویداد استفاده می‌کنیم
+      switch (roomEvent.whichEventType()) {
+        case proto.RoomEvent_EventType.canvasSnapshot:
+          final snapshot = roomEvent.canvasSnapshot;
+          final newPaths = <BigInt, PathData>{};
+          for (final pathFull in snapshot.paths) {
+            final pathId = BigInt.parse(pathFull.pathId.toString());
+            newPaths[pathId] = PathData(
+              id: pathId,
+              points: pathFull.points
+                  .map((p) => Offset(p.dx.toDouble(), p.dy.toDouble()))
+                  .toList(),
+              color: Color(pathFull.color),
+              strokeWidth: pathFull.strokeWidth.toDouble(),
+            );
+          }
+          if (mounted) setState(() => _paths = newPaths);
+          break;
+
+        case proto.RoomEvent_EventType.canvasCommand:
+          _applyCanvasCommand(roomEvent.canvasCommand.command);
+          break;
+
+        case proto.RoomEvent_EventType.audioChunk:
+          // حالا به صورت امن به فیلد audioChunk دسترسی داریم
+          final audioChunkData = roomEvent.audioChunk.chunk.data;
+          _audioService.playAudioChunk(Uint8List.fromList(audioChunkData));
+          break;
+
+        case proto.RoomEvent_EventType.hostEndedSession:
+          if (_isReplaying) {
+            _handleReplayFinished();
+          } else {
+            _showErrorDialog("The host has ended the session.");
+            _disconnect(isFinal: true);
+          }
+          break;
+
+        // این دو مورد را فعلا مدیریت نمی‌کنیم، اما بهتر است در switch باشند
+        case proto.RoomEvent_EventType.userJoined:
+        case proto.RoomEvent_EventType.userLeft:
+          break;
+
+        // حالت 'notSet' زمانی است که هیچ‌کدام از فیلدهای oneof مقدار ندارند
+        case proto.RoomEvent_EventType.notSet:
+          // هیچ کاری انجام نده
+          break;
       }
     } catch (e) {
       debugPrint("Failed to parse event: $e");
@@ -209,6 +263,7 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
       _setupStreamListener();
+      await _startAudioProcessing();
     } catch (e) {
       _showErrorDialog(e.toString());
     }
@@ -237,6 +292,7 @@ class _MyHomePageState extends State<MyHomePage> {
       }
 
       _setupStreamListener();
+      await _startAudioProcessing();
     } catch (e) {
       _showErrorDialog(e.toString());
     }
@@ -244,6 +300,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _disconnect({bool isFinal = false}) {
     if (!_isConnected && !_isReplaying) return;
+
+    _audioService.stop();
+    _outgoingAudioSubscription?.cancel();
+    _outgoingAudioSubscription = null;
 
     _eventSubscription?.cancel();
     _eventSubscription = null;
@@ -596,7 +656,6 @@ class _MyHomePageState extends State<MyHomePage> {
                       ],
                     ),
                     const Divider(height: 24),
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -664,7 +723,6 @@ class _MyHomePageState extends State<MyHomePage> {
                             ),
                           ),
                     const Divider(height: 24),
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [

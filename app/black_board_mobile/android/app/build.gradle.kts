@@ -39,6 +39,10 @@ android {
     }
 }
 
+dependencies {
+    implementation("io.github.jaredmdobson:concentus:1.0.2")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.20")
+}
 flutter {
     source = "../.."
 }
