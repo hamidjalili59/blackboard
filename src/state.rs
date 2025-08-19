@@ -18,7 +18,8 @@ pub struct Room {
     pub id: RoomId,
     pub name: String,
     pub participants: HashMap<ClientId, Participant>,
-    pub broadcast_sender: broadcast::Sender<RoomEvent>,
+    pub event_sender: broadcast::Sender<RoomEvent>, 
+    pub audio_sender: broadcast::Sender<RoomEvent>,
     pub host_id: ClientId,
     pub active_paths: HashMap<u64, PathFull>,
     pub canvas_history: Vec<PathFull>,
@@ -27,12 +28,14 @@ pub struct Room {
 
 impl Room {
     pub fn new(id: RoomId, name: String, host_id: ClientId) -> Self {
-        let (broadcast_sender, _) = broadcast::channel(1024);
+        let (event_sender, _) = broadcast::channel(256); // ظرفیت کمتر برای رویدادها
+        let (audio_sender, _) = broadcast::channel(1024); // ظرفیت بیشتر برای صدا
         Room {
             id,
             name,
             participants: HashMap::new(),
-            broadcast_sender,
+            event_sender,
+            audio_sender,
             host_id,
             active_paths: HashMap::new(),
             canvas_history: Vec::new(),

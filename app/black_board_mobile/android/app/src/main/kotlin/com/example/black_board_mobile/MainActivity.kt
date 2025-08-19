@@ -15,6 +15,9 @@ import io.flutter.Log
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.*
 import kotlin.math.sqrt
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 
 class MainActivity : FlutterActivity() {
     private val METHOD_CHANNEL_NAME = "com.example.black_board_mobile/method"
@@ -25,6 +28,10 @@ class MainActivity : FlutterActivity() {
 
     // بخش ارسال (ضبط و انکود)
     private var audioRecord: AudioRecord? = null
+
+    private var noiseSuppressor: NoiseSuppressor? = null
+    private var acousticEchoCanceler: AcousticEchoCanceler? = null
+    private var automaticGainControl: AutomaticGainControl? = null
     private var opusEncoder: OpusEncoder? = null
     private var recordingJob: Job? = null
 
@@ -43,7 +50,7 @@ class MainActivity : FlutterActivity() {
     private val recordBufferSize =
         AudioRecord.getMinBufferSize(sampleRate, channelConfigRecord, audioFormat)
     private val playBufferSize =
-        AudioTrack.getMinBufferSize(sampleRate, channelConfigPlay, audioFormat)
+        AudioTrack.getMinBufferSize(sampleRate, channelConfigPlay, audioFormat) * 4
 
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -159,14 +166,15 @@ class MainActivity : FlutterActivity() {
 
     private fun startRecording(eventSink: EventChannel.EventSink?) {
         if (eventSink == null) return
-        stopRecording() // اطمینان از توقف فرآیند قبلی
+        stopRecording()
 
-        // ۲. مقداردهی اولیه انکودر و رکوردر (برای ارسال)
         opusEncoder = OpusEncoder(
             sampleRate,
             1,
             io.github.jaredmdobson.concentus.OpusApplication.OPUS_APPLICATION_VOIP
         )
+        opusEncoder?.useDTX = true
+        opusEncoder?.useVBR = true
         opusEncoder?.bitrate = 16000
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -182,12 +190,35 @@ class MainActivity : FlutterActivity() {
             audioFormat,
             recordBufferSize
         )
+        val audioSessionId = audioRecord?.audioSessionId ?: -1
+        if (audioSessionId != -1) {
+            if (NoiseSuppressor.isAvailable()) {
+                noiseSuppressor = NoiseSuppressor.create(audioSessionId)
+                noiseSuppressor?.enabled = true
+                Log.d("AudioFX", "NoiseSuppressor enabled.")
+            } else {
+                Log.d("AudioFX", "NoiseSuppressor not available.")
+            }
+
+            if (AcousticEchoCanceler.isAvailable()) {
+                acousticEchoCanceler = AcousticEchoCanceler.create(audioSessionId)
+                acousticEchoCanceler?.enabled = true
+                Log.d("AudioFX", "AcousticEchoCanceler enabled.")
+            } else {
+                Log.d("AudioFX", "AcousticEchoCanceler not available.")
+            }
+
+            if (AutomaticGainControl.isAvailable()) {
+                automaticGainControl = AutomaticGainControl.create(audioSessionId)
+                automaticGainControl?.enabled = true
+                Log.d("AudioFX", "AutomaticGainControl enabled.")
+            } else {
+                Log.d("AudioFX", "AutomaticGainControl not available.")
+            }
+        }
         audioRecord?.startRecording()
 
-        // *** شروع تغییر ***
-        // از lifecycleScope استفاده می‌کنیم که به چرخه حیات MainActivity متصل است
         recordingJob = lifecycleScope.launch(Dispatchers.IO) {
-            // *** پایان تغییر ***
             val pcmBuffer = ShortArray(frameSize)
             val opusBuffer = ByteArray(1024)
 
@@ -206,7 +237,6 @@ class MainActivity : FlutterActivity() {
                             ) ?: 0
                             if (encodedBytes > 0) {
                                 withContext(Dispatchers.Main) {
-                                    // بررسی مجدد isActive برای جلوگیری از ارسال داده بعد از کنسل شدن
                                     if (isActive) {
                                         eventSink.success(opusBuffer.copyOfRange(0, encodedBytes))
                                     }
@@ -214,14 +244,11 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                     } else if (bytesRead < 0) {
-                        // یک خطا رخ داده است (مثلاً -3 ERROR_INVALID_OPERATION)
                         Log.e("AudioRecord", "Error reading audio data: $bytesRead")
-                        // حلقه را متوقف می‌کنیم
                         break
                     }
                 } catch (e: Exception) {
                     Log.e("RecordingJob", "Exception in recording loop", e)
-                    // در صورت بروز هر خطایی، حلقه متوقف می‌شود
                     break
                 }
             }
@@ -232,6 +259,12 @@ class MainActivity : FlutterActivity() {
     private fun stopRecording() {
         recordingJob?.cancel()
         recordingJob = null
+        noiseSuppressor?.release()
+        acousticEchoCanceler?.release()
+        automaticGainControl?.release()
+        noiseSuppressor = null
+        acousticEchoCanceler = null
+        automaticGainControl = null
         audioRecord?.let {
             try {
                 if (it.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
@@ -248,7 +281,6 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleReceivedOpusData(opusData: ByteArray) {
-        // ۳. دیکود و پخش داده دریافتی
         val pcmBuffer = ShortArray(frameSize)
         val decodedSamples =
             opusDecoder?.decode(opusData, 0, opusData.size, pcmBuffer, 0, frameSize, false) ?: 0
@@ -257,18 +289,19 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // ... توابع دسترسی میکروفون و onDestroy ...
-    private fun checkMicPermission(): Boolean { /* ... بدون تغییر ... */ return ActivityCompat.checkSelfPermission(
-        this,
-        Manifest.permission.RECORD_AUDIO
-    ) == PackageManager.PERMISSION_GRANTED
+    private fun checkMicPermission(): Boolean {
+        return ActivityCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun requestMicPermission() { /* ... بدون تغییر ... */ ActivityCompat.requestPermissions(
-        this,
-        arrayOf(Manifest.permission.RECORD_AUDIO),
-        101
-    )
+    private fun requestMicPermission() {
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.RECORD_AUDIO),
+            101
+        )
     }
 
     override fun onDestroy() {

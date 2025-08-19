@@ -4,7 +4,7 @@ use black_board_back::logger::RoomLogger;
 use black_board_back::proto::{
     self, BroadcastedAudioChunk, BroadcastedCanvasCommand, CanvasSnapshot, ClientToServer,
     CreateRoomResponse, ErrorResponse, HostEndedSession, InitialResponse, JoinRoomResponse,
-    RoomEvent, RoomMessage, ServerToClient, UserJoined, UserLeft, canvas_command,
+    RoomEvent, RoomMessage, ServerToClient, UserJoined, UserLeft,
     client_to_server::Payload as ClientPayload, initial_request::RequestType,
     initial_response::ResponseType, room_event::EventType,
     room_message::Payload as RoomMessagePayload, server_to_client::Payload as ServerPayload,
@@ -12,6 +12,7 @@ use black_board_back::proto::{
 use black_board_back::state::{Participant, Room, ServerState};
 use prost::Message;
 use quinn::{Connection, Endpoint, RecvStream, ServerConfig, TransportConfig};
+use quinn_proto::congestion::BbrConfig;
 use rand::Rng;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use serde::Serialize;
@@ -155,13 +156,15 @@ async fn handle_connection(connection: Connection, state: SharedServerState) -> 
                 let logger = RoomLogger::new(&room_id)?;
                 let room_name = format!("{}'s Room", req.username);
                 let mut new_room = Room::new(room_id.clone(), room_name, client_id);
-                let mut log_receiver = new_room.broadcast_sender.subscribe();
+                let mut log_receiver = new_room.event_sender.subscribe();
                 let participant = new_room.add_participant(client_id, req.username.clone());
                 let logger_room_id = room_id.clone();
                 tokio::spawn(async move {
                     while let Ok(event) = log_receiver.recv().await {
-                        if let Err(e) = logger.log(&event).await {
-                            error!("Failed to log event for room {}: {}", logger_room_id, e);
+                        if !matches!(&event.event_type, Some(EventType::AudioChunk(_))) {
+                            if let Err(e) = logger.log(&event).await {
+                                error!("Failed to log event for room {}: {}", logger_room_id, e);
+                            }
                         }
                     }
                 });
@@ -293,13 +296,13 @@ async fn handle_participant_session(
     room_id: String,
     participant: Participant,
 ) -> Result<()> {
-    let broadcast_sender = {
+    let (event_sender, audio_sender) = {
         let state_guard = state.lock().await;
         let room = state_guard
             .rooms
             .get(&room_id)
-            .ok_or_else(|| anyhow!("Room disappeared while getting sender"))?;
-        room.broadcast_sender.clone()
+            .ok_or_else(|| anyhow!("Room disappeared while getting senders"))?;
+        (room.event_sender.clone(), room.audio_sender.clone())
     };
 
     let join_event = RoomEvent {
@@ -309,30 +312,24 @@ async fn handle_participant_session(
             client_id_uuid: participant.client_id.to_string(),
         })),
     };
-    let _ = broadcast_sender.send(join_event);
+    let _ = event_sender.send(join_event);
 
-    let mut broadcast_receiver = broadcast_sender.subscribe();
-
-    let writer_connection = connection.clone();
+    let mut event_receiver = event_sender.subscribe();
+    let event_writer_conn = connection.clone();
     let participant_id_clone = participant.participant_id;
-    let client_id_clone = participant.client_id;
     let writer_task = tokio::spawn(async move {
         loop {
-            match broadcast_receiver.recv().await {
+            match event_receiver.recv().await {
                 Ok(event) => {
                     let should_skip = match &event.event_type {
                         Some(EventType::CanvasCommand(cmd)) => {
                             cmd.from_participant_id == participant_id_clone
-                        }
-                        Some(EventType::AudioChunk(chunk)) => {
-                            chunk.from_participant_id == participant_id_clone
                         }
                         Some(EventType::UserJoined(user)) => {
                             user.participant_id == participant_id_clone
                         }
                         _ => false,
                     };
-
                     if should_skip {
                         continue;
                     }
@@ -340,27 +337,46 @@ async fn handle_participant_session(
                     let message = ServerToClient {
                         payload: Some(ServerPayload::RoomEvent(event)),
                     };
-
-                    match writer_connection.open_uni().await {
-                        Ok(mut send_stream) => {
-                            if send_stream
-                                .write_all(&message.encode_to_vec())
-                                .await
-                                .is_err()
-                            {
-                                break;
-                            }
-                            if send_stream.finish().is_err() {
-                                break;
-                            }
-                        }
-                        Err(_) => {
-                            break;
-                        }
+                    if send_message_to_client(&event_writer_conn, message)
+                        .await
+                        .is_err()
+                    {
+                        break;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(_)) => {
-                    warn!("Client {} is lagging behind.", client_id_clone);
+                    warn!("Event writer for {} is lagging.", participant_id_clone)
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
+    let mut audio_receiver = audio_sender.subscribe();
+    let audio_writer_conn = connection.clone();
+    let participant_id_clone2 = participant.participant_id;
+    let audio_writer_task = tokio::spawn(async move {
+        loop {
+            match audio_receiver.recv().await {
+                Ok(event) => {
+                    if let Some(EventType::AudioChunk(chunk)) = &event.event_type {
+                        if chunk.from_participant_id == participant_id_clone2 {
+                            continue;
+                        }
+                    }
+
+                    let message = ServerToClient {
+                        payload: Some(ServerPayload::RoomEvent(event)),
+                    };
+                    if send_message_to_client(&audio_writer_conn, message)
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    warn!("Audio writer for {} is lagging.", participant_id_clone2)
                 }
                 Err(broadcast::error::RecvError::Closed) => break,
             }
@@ -372,15 +388,16 @@ async fn handle_participant_session(
             loop {
                 match connection.accept_bi().await {
                     Ok((_send, mut recv)) => {
-                        let sender = broadcast_sender.clone();
-                        let state_clone = state.clone();
-                        let room_id_clone = room_id.clone();
-                        let current_participant_id = participant.participant_id;
-                        tokio::spawn(async move {
-                            if let Err(e) = process_client_stream(&mut recv, &sender, current_participant_id, state_clone, &room_id_clone).await {
-                                warn!("Failed to process stream from client {}: {}", current_participant_id, e);
-                            }
-                        });
+                        if let Err(e) = process_client_stream(
+                            &mut recv,
+                            &event_sender,
+                            &audio_sender,
+                            participant.participant_id,
+                            state.clone(),
+                            &room_id,
+                        ).await {
+                            warn!("Failed to process stream from client {}: {}", participant.participant_id, e);
+                        }
                     }
                     Err(e) => {
                         info!("Client {} stream listener failed, likely disconnected: {}", participant.client_id, e);
@@ -395,6 +412,7 @@ async fn handle_participant_session(
     }
 
     writer_task.abort();
+    audio_writer_task.abort();
     info!("Cleaning up resources for client {}", participant.client_id);
 
     {
@@ -412,7 +430,7 @@ async fn handle_participant_session(
                         username: participant.username,
                     })),
                 };
-                let _ = room.broadcast_sender.send(leave_event);
+                let _ = room.event_sender.send(leave_event);
             } else if participant.client_id == room.host_id {
                 info!(
                     "Host {} has left room {}. Ending session for all.",
@@ -423,7 +441,7 @@ async fn handle_participant_session(
                         message: "The host has ended the session.".to_string(),
                     })),
                 };
-                let _ = room.broadcast_sender.send(end_event);
+                let _ = room.event_sender.send(end_event);
                 state_guard.rooms.remove(&room_id);
             } else {
                 room.participants.remove(&participant.client_id);
@@ -437,7 +455,7 @@ async fn handle_participant_session(
                         username: participant.username,
                     })),
                 };
-                let _ = room.broadcast_sender.send(leave_event);
+                let _ = room.event_sender.send(leave_event);
             }
         }
     }
@@ -445,9 +463,16 @@ async fn handle_participant_session(
     Ok(())
 }
 
+async fn send_message_to_client(connection: &Connection, message: ServerToClient) -> Result<()> {
+    let mut send_stream = connection.open_uni().await?;
+    send_stream.write_all(&message.encode_to_vec()).await?;
+    send_stream.finish()?;
+    Ok(())
+}
 async fn process_client_stream(
     recv_stream: &mut RecvStream,
-    broadcast_sender: &broadcast::Sender<RoomEvent>,
+    event_sender: &broadcast::Sender<RoomEvent>,
+    audio_sender: &broadcast::Sender<RoomEvent>,
     participant_id: u32,
     state: SharedServerState,
     room_id: &str,
@@ -459,70 +484,79 @@ async fn process_client_stream(
         payload: Some(payload),
     })) = message.payload
     {
-        let event_to_broadcast = match &payload {
-            RoomMessagePayload::CanvasCommand(cmd) => Some(RoomEvent {
-                event_type: Some(EventType::CanvasCommand(BroadcastedCanvasCommand {
-                    from_participant_id: participant_id,
-                    command: Some(cmd.clone()),
-                })),
-            }),
-            RoomMessagePayload::AudioChunk(chunk) => Some(RoomEvent {
-                event_type: Some(EventType::AudioChunk(BroadcastedAudioChunk {
-                    from_participant_id: participant_id,
-                    chunk: Some(chunk.clone()),
-                })),
-            }),
-        };
+        match payload {
+            RoomMessagePayload::CanvasCommand(cmd) => {
+                let event = RoomEvent {
+                    event_type: Some(EventType::CanvasCommand(BroadcastedCanvasCommand {
+                        from_participant_id: participant_id,
+                        command: Some(cmd.clone()),
+                    })),
+                };
 
-        if let Some(event) = event_to_broadcast {
-            broadcast_sender.send(event)?;
-        }
+                event_sender.send(event)?;
+                handle_canvas_history(cmd, state, room_id).await;
+            }
+            RoomMessagePayload::AudioChunk(chunk) => {
+                let event = RoomEvent {
+                    event_type: Some(EventType::AudioChunk(BroadcastedAudioChunk {
+                        from_participant_id: participant_id,
+                        chunk: Some(chunk),
+                    })),
+                };
 
-        if let RoomMessagePayload::CanvasCommand(cmd) = payload {
-            use canvas_command::CommandType;
-            let mut state_guard = state.lock().await;
-            if let Some(room) = state_guard.rooms.get_mut(room_id) {
-                match cmd.command_type {
-                    Some(CommandType::PathStart(start)) => {
-                        let path_data = proto::PathFull {
-                            path_id: start.path_id,
-                            points: start.point.map_or(vec![], |p| vec![p]),
-                            color: start.color,
-                            stroke_width: start.stroke_width,
-                        };
-                        room.active_paths.insert(start.path_id, path_data);
-                    }
-                    Some(CommandType::PathAppend(append)) => {
-                        if let Some(active_path) = room.active_paths.get_mut(&append.path_id) {
-                            if let Some(p) = append.point {
-                                active_path.points.push(p);
-                            }
-                        }
-                    }
-                    Some(CommandType::PathEnd(end)) => {
-                        if let Some(finished_path) = room.active_paths.remove(&end.path_id) {
-                            room.canvas_history.push(finished_path);
-                        }
-                    }
-                    _ => {}
-                }
+                audio_sender.send(event)?;
             }
         }
     }
+
     Ok(())
 }
 
+async fn handle_canvas_history(cmd: proto::CanvasCommand, state: SharedServerState, room_id: &str) {
+    use proto::canvas_command::CommandType;
+    let mut state_guard = state.lock().await;
+    if let Some(room) = state_guard.rooms.get_mut(room_id) {
+        match cmd.command_type {
+            Some(CommandType::PathStart(start)) => {
+                let path_data = proto::PathFull {
+                    path_id: start.path_id,
+                    points: start.point.map_or(vec![], |p| vec![p]),
+                    color: start.color,
+                    stroke_width: start.stroke_width,
+                };
+                room.active_paths.insert(start.path_id, path_data);
+            }
+            Some(CommandType::PathAppend(append)) => {
+                if let Some(active_path) = room.active_paths.get_mut(&append.path_id) {
+                    if let Some(p) = append.point {
+                        active_path.points.push(p);
+                    }
+                }
+            }
+            Some(CommandType::PathEnd(end)) => {
+                if let Some(finished_path) = room.active_paths.remove(&end.path_id) {
+                    room.canvas_history.push(finished_path);
+                }
+            }
+            _ => {}
+        }
+    }
+}
 fn configure_server() -> Result<(ServerConfig, Vec<u8>)> {
+    // تولید گواهی TLS تستی
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()])?;
     let cert_der_bytes = cert.cert.der().to_vec();
     let priv_key_der_bytes = cert.signing_key.serialize_der();
     let priv_key = PrivateKeyDer::Pkcs8(priv_key_der_bytes.into());
     let cert_chain = vec![CertificateDer::from(cert_der_bytes.clone())];
 
+    // ساخت TransportConfig با BBR
     let mut transport = TransportConfig::default();
     transport.max_idle_timeout(Some(Duration::from_secs(3600 * 24).try_into()?));
     transport.keep_alive_interval(Some(Duration::from_secs(5)));
+    transport.congestion_controller_factory(Arc::new(BbrConfig::default()));
 
+    // کانفیگ سرور
     let mut server_config = ServerConfig::with_single_cert(cert_chain, priv_key)?;
     server_config.transport = Arc::new(transport);
 
