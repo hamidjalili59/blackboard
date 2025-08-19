@@ -10,12 +10,15 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import io.github.jaredmdobson.concentus.OpusDecoder
 import io.github.jaredmdobson.concentus.OpusEncoder
+import androidx.lifecycle.lifecycleScope
+import io.flutter.Log
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.*
 import kotlin.math.sqrt
 
 class MainActivity : FlutterActivity() {
-    private val METHOD_CHANNEL_NAME = "com.hamid.opus_streamer/method"
-    private val EVENT_CHANNEL_NAME = "com.hamid.opus_streamer/event"
+    private val METHOD_CHANNEL_NAME = "com.example.black_board_mobile/method"
+    private val EVENT_CHANNEL_NAME = "com.example.black_board_mobile/event"
 
     private var methodChannel: MethodChannel? = null
     private var eventChannel: EventChannel? = null
@@ -35,7 +38,7 @@ class MainActivity : FlutterActivity() {
     private val channelConfigPlay = AudioFormat.CHANNEL_OUT_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
 
-    private val vadThreshold = 1000.0
+    private val vadThreshold = 800.0
     private val frameSize = 320 // 20ms of audio at 16kHz
     private val recordBufferSize =
         AudioRecord.getMinBufferSize(sampleRate, channelConfigRecord, audioFormat)
@@ -103,7 +106,7 @@ class MainActivity : FlutterActivity() {
         audioTrack = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
@@ -131,7 +134,7 @@ class MainActivity : FlutterActivity() {
         val rms = sqrt(sumOfSquares / pcmData.size)
 
         // برای دیباگ و تنظیم آستانه، مقدار rms را چاپ می‌کنیم
-        println("VAD RMS: $rms")
+        // println("VAD RMS: $rms")
 
         // اگر انرژی از آستانه بالاتر بود، گفتار است
         return rms > vadThreshold
@@ -140,13 +143,18 @@ class MainActivity : FlutterActivity() {
     private fun stopAudioEngine() {
         // توقف پلیر
         audioTrack?.let {
-            if (it.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                it.stop()
+            try {
+                if (it.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                    it.stop()
+                }
+                it.release()
+            } catch (e: IllegalStateException) {
+                Log.e("AudioTrack", "Failed to stop/release AudioTrack", e)
             }
-            it.release()
         }
         audioTrack = null
         opusDecoder = null
+        Log.d("AudioEngine", "Playback resources stopped and released.")
     }
 
     private fun startRecording(eventSink: EventChannel.EventSink?) {
@@ -159,6 +167,7 @@ class MainActivity : FlutterActivity() {
             1,
             io.github.jaredmdobson.concentus.OpusApplication.OPUS_APPLICATION_VOIP
         )
+        opusEncoder?.bitrate = 16000
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.RECORD_AUDIO
@@ -175,25 +184,48 @@ class MainActivity : FlutterActivity() {
         )
         audioRecord?.startRecording()
 
-        recordingJob = CoroutineScope(Dispatchers.IO).launch {
+        // *** شروع تغییر ***
+        // از lifecycleScope استفاده می‌کنیم که به چرخه حیات MainActivity متصل است
+        recordingJob = lifecycleScope.launch(Dispatchers.IO) {
+            // *** پایان تغییر ***
             val pcmBuffer = ShortArray(frameSize)
             val opusBuffer = ByteArray(1024)
-            while (isActive) {
-                val bytesRead = audioRecord?.read(pcmBuffer, 0, frameSize) ?: 0
-                if (bytesRead > 0) {
 
-                    // ===== فراخوانی تابع VAD داخلی خودمان =====
-                    if (isSpeech(pcmBuffer)) {
-                        // println("Speech detected!") // می‌توانید برای دیباگ از این خط استفاده کنید
-                        val encodedBytes = opusEncoder?.encode(pcmBuffer, 0, frameSize, opusBuffer, 0, opusBuffer.size) ?: 0
-                        if (encodedBytes > 0) {
-                            withContext(Dispatchers.Main) {
-                                eventSink.success(opusBuffer.copyOfRange(0, encodedBytes))
+            while (isActive) {
+                try {
+                    val bytesRead = audioRecord?.read(pcmBuffer, 0, frameSize) ?: 0
+                    if (bytesRead > 0) {
+                        if (isSpeech(pcmBuffer)) {
+                            val encodedBytes = opusEncoder?.encode(
+                                pcmBuffer,
+                                0,
+                                frameSize,
+                                opusBuffer,
+                                0,
+                                opusBuffer.size
+                            ) ?: 0
+                            if (encodedBytes > 0) {
+                                withContext(Dispatchers.Main) {
+                                    // بررسی مجدد isActive برای جلوگیری از ارسال داده بعد از کنسل شدن
+                                    if (isActive) {
+                                        eventSink.success(opusBuffer.copyOfRange(0, encodedBytes))
+                                    }
+                                }
                             }
                         }
+                    } else if (bytesRead < 0) {
+                        // یک خطا رخ داده است (مثلاً -3 ERROR_INVALID_OPERATION)
+                        Log.e("AudioRecord", "Error reading audio data: $bytesRead")
+                        // حلقه را متوقف می‌کنیم
+                        break
                     }
+                } catch (e: Exception) {
+                    Log.e("RecordingJob", "Exception in recording loop", e)
+                    // در صورت بروز هر خطایی، حلقه متوقف می‌شود
+                    break
                 }
             }
+            Log.d("RecordingJob", "Recording loop finished.")
         }
     }
 
@@ -201,13 +233,18 @@ class MainActivity : FlutterActivity() {
         recordingJob?.cancel()
         recordingJob = null
         audioRecord?.let {
-            if (it.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                it.stop()
+            try {
+                if (it.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    it.stop()
+                }
+                it.release()
+            } catch (e: IllegalStateException) {
+                Log.e("AudioRecord", "Failed to stop/release AudioRecord", e)
             }
-            it.release()
         }
         audioRecord = null
         opusEncoder = null
+        Log.d("AudioEngine", "Recording resources stopped and released.")
     }
 
     private fun handleReceivedOpusData(opusData: ByteArray) {

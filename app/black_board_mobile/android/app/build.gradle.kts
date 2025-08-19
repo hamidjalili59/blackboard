@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.black_board_mobile"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -42,6 +42,7 @@ android {
 dependencies {
     implementation("io.github.jaredmdobson:concentus:1.0.2")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.20")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 }
 flutter {
     source = "../.."
